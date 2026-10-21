@@ -1,0 +1,47 @@
+# Python / uv
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Licensed market data (Bloomberg) and derived artefacts: never commit
+data/*
+!data/README.md
+!data/is2/
+data/is2/*
+!data/is2/bbg_collector.py
+!data/is2/bloomberg_data_collection.ipynb
+# Collector bundles (bundle_for_mac)
+*.zip
+# Audit output contains per-day Bloomberg volumes/prices; regenerate with `hftf data audit`
+docs/data/
+
+# Experiment outputs
+runs/
+checkpoints/
+*.ckpt
+*.pt
+tb_logs/
+mlruns/
+wandb/
+*.log
+
+# Secrets
+.env
+.env.*
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

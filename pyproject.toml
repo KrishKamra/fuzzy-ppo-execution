@@ -1,0 +1,66 @@
+[project]
+name = "hftf"
+version = "0.1.0"
+description = "Market regime-aware optimal execution: PPO with an evolving Fuzzy Neural Network (eFNN) on NSE microstructure data"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "hftf-data",
+    "hftf-sim",
+    "hftf-fuzzy",
+    "hftf-rl",
+    "hftf-eval",
+    "hftf-cli",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*", "apps/*"]
+
+[tool.uv.sources]
+hftf-data = { workspace = true }
+hftf-sim = { workspace = true }
+hftf-fuzzy = { workspace = true }
+hftf-rl = { workspace = true }
+hftf-eval = { workspace = true }
+hftf-cli = { workspace = true }
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "ipykernel>=6.29",
+    "matplotlib>=3.9",
+    "pre-commit>=4.0",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["data", "notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "NPY", "PD"]
+ignore = ["N803", "N806", "PD010", "PD013"]  # stack/unstack are idiomatic here
+
+[tool.ruff.lint.isort]
+known-first-party = ["hftf_data", "hftf_sim", "hftf_fuzzy", "hftf_rl", "hftf_eval", "hftf_cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "packages"]
+addopts = "-q"
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true

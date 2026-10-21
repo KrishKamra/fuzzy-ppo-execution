@@ -1,0 +1,15 @@
+# NSE cash-equity transaction costs. Rates as understood at project start; VERIFY against current
+# NSE/SEBI circulars before reporting results. All rates are fractions of traded notional.
+product: delivery          # delivery | intraday
+stt:
+  delivery: {buy: 0.001, sell: 0.001}
+  intraday: {buy: 0.0, sell: 0.00025}
+exchange_txn: 0.0000297    # NSE transaction charge
+sebi_fee: 0.000001         # Rs 10 per crore
+stamp_duty:
+  delivery: {buy: 0.00015, sell: 0.0}
+  intraday: {buy: 0.00003, sell: 0.0}
+gst_rate: 0.18             # on brokerage + exchange_txn + sebi_fee
+brokerage:
+  bps: 0.0                 # proportional brokerage, in bps
+  fixed_per_order_inr: 20.0  # per CHILD order; this is what penalises over-slicing

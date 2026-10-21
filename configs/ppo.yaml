@@ -1,0 +1,15 @@
+# PPO defaults (docs/ARCHITECTURE.md §6).
+n_envs: 64
+rollout_steps: 120
+gamma: 1.0
+gae_lambda: 0.95
+clip: 0.2
+epochs: 10
+minibatches: 8
+lr: 3.0e-4
+entropy_coef: 1.0e-3
+value_coef: 0.5
+max_grad_norm: 0.5
+target_kl: 0.02
+trunk: {hidden: [64, 64], activation: tanh}
+seed: 0

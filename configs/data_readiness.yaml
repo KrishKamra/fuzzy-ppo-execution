@@ -1,0 +1,27 @@
+# Data-readiness thresholds (docs/DATA_READINESS.md). `hftf data audit --tier <tier>` checks against these.
+#   pilot    - enough to build and debug the full pipeline (M1-M3)
+#   research - minimum for reportable out-of-sample results (M4)
+tiers:
+  pilot:
+    min_intraday_equities: 3
+    min_bar_sessions: 60          # per equity, TRADE/BID/ASK
+    max_missing_bar_sessions: 1   # trading sessions (per NIFTY daily) absent inside the bar window
+    min_full_tick_days: 15        # per tick-covered equity
+    min_tick_equities: 3          # equities that must meet min_full_tick_days
+    min_daily_sessions: 250       # per equity, for ADV / daily-vol features
+  research:
+    min_intraday_equities: 50
+    min_bar_sessions: 90          # ~ one full Bloomberg intraday window; more requires accumulating pulls
+    max_missing_bar_sessions: 0
+    min_full_tick_days: 40        # ~2 Bloomberg tick windows: needs >= 2 pulls ~4 weeks apart
+    min_tick_equities: 10         # collector TICK_UNIVERSE_N default
+    min_daily_sessions: 250
+# Integrity checks: identical for every tier
+integrity:
+  full_tick_day_last_tick_ist: "15:20:00"   # a tick day is "full" if ticks reach this time
+  max_volume_recon_error: 0.001             # |clean tick volume / bar volume - 1| on full tick days
+  max_crossed_quotes: 0                     # after clean_quotes
+  min_imbalance_proxy_pearson: 0.70         # bar proxy vs tick L1 imbalance
+  context_instruments: ["NIFTY Index", "NSEBANK Index", "INVIXN Index"]
+  min_feature_coverage: 0.95                # non-null share of eFNN inputs in features_1m_v2 (full days)
+  efnn_input_columns: [imb_bar_proxy, spread_var_30m, rv_30m]

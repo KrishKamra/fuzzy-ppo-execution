@@ -127,6 +127,8 @@ def tick_size_check(paths: DataPaths) -> list[dict]:
 def daily_field_coverage(paths: DataPaths) -> dict:
     out = {}
     for cls in ("equity", "index", "futures", "fx", "rates", "commodity", "options"):
+        if not (paths.daily / f"daily_{cls}.parquet").exists():  # options are no longer pulled (v1 scope)
+            continue
         df = load_daily(cls, paths)
         out[cls] = {
             "securities": sorted(df["security"].unique()),

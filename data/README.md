@@ -4,7 +4,7 @@ Git-ignored. Bloomberg data is licensed and must not be committed or redistribut
 
 | Path | What | Written by |
 |---|---|---|
-| `is2/bbg_data/` | raw Bloomberg pull (read-only) | `is2/bbg_collector.py` / `is2/bloomberg_data_collection.ipynb` on a Terminal PC |
+| `is2/bbg_data/` | raw Bloomberg pull (read-only) | `../Bloomberg_training_pull.ipynb` on a Terminal PC (bars, ticks, daily, reference); `is2/bbg_collector.py` for the live/depth forward recorders |
 | `processed/features_1m_v2.parquet` | corrected causal 1-min feature table | `uv run hftf data build-features` |
 
 Set `HFTF_RAW_DIR` to read a raw pull from somewhere else. Read `docs/DATA_AUDIT.md` before using any raw file.

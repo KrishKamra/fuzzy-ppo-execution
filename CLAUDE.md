@@ -8,6 +8,7 @@ Read `project_context.md` first (domain, data dictionary, invariants). The bindi
 - `uv run pytest`: tests | `uv run ruff check . && uv run ruff format --check .`: lint
 - `uv run hftf data audit [--tier pilot|research] [--strict]`: validate the raw pull and run the readiness checks (`docs/DATA_READINESS.md`)
 - `uv run hftf data build-features`: → `data/processed/features_1m_v2.parquet`
+- `Bloomberg_training_pull.ipynb` (Terminal PC): gap-driven raw pull; `MODE = "plan"` previews gaps anywhere
 
 ## Rules
 - Causality: model inputs must be observable at `decision_time`; scalers fit on the train split only.

@@ -44,38 +44,34 @@ A "full tick day" is a day whose ticks reach 15:20 IST. Partial days (e.g. pulle
 
 ## Procedure to reach the research tier
 
-On the Bloomberg Terminal PC, in `data/is2/bloomberg_data_collection.ipynb`:
+The training-data pull is the root notebook `Bloomberg_training_pull.ipynb`. It
+supersedes the `LIMIT`-based flow in `data/is2/bloomberg_data_collection.ipynb`, and it is gap-driven:
+each run fetches only the sessions and tick days that are missing or partial on disk.
 
-**1. Fix tickers in the collector source.** `bbg_collector.py` is regenerated from notebook cell 4
-(`%%writefile`), so edit **that cell**, not the `.py` file.
-- `STARTER_EQUITIES`: change `"RIL IN Equity"` to `"RELIANCE IN Equity"` (verify in the Terminal). Check
-  `"TTMT IN Equity"` (Tata Motors was demerged; find the current ticker).
-- `SEED_CLASSES`: verify or remove `NSENEXT50 Index`, `MIBOR Index`, `RBIRREPO Index`.
-- In cell 8, run the probe on a resolving ticker: `bbg.probe("RELIANCE IN Equity")`. The current
-  `RIL IN Equity` probe resolves nothing, which is why `capabilities.json` reported no history.
+**1. Preview (optional, works on the Mac too):** set `MODE = "plan"` and run all. It prints the missing
+sessions, the request count and a coverage preview of R01-R05 and R10. It contacts nothing and writes nothing.
 
-**2. Settings (cell 6):** `LIMIT = None`. Keep `bbg.TICK_UNIVERSE_N = 10` (≥ 10 needed for R05). Run
-`bbg.estimate(None)` (cell 11) and confirm it fits the terminal's daily/monthly data limits. If not,
-spread the run over several days; finished chunks are skipped on re-run.
+**2. Pull (on the Bloomberg PC):** set `MODE = "pull"` and **Restart & Run All**. In one pass it:
+- builds the universe from all current Nifty-50 members (NSE `IS` tickers; the old `IN` seeds pulled the
+  composite book), plus names that already have bars and a 5-name Nifty Next 50 buffer for R01. **Verify
+  `BUFFER_INDEX`** (`NIFTYJR Index`) in the Terminal; it is skipped if it does not resolve;
+- probes a resolved member, checks that bar times are UTC, and measures the real bar and tick history depth;
+- re-requests any missing or partial session inside the window. That covers 2026-09-10 (R03) and the
+  2026-10-21 partial day with no manual file deletion. Sep 10 must be fetched while it is inside the ~140-day
+  window, i.e. **before late January 2027**;
+- pulls ticks for a fixed tick universe (`reference/tick_universe.json`, 12 names: the 3 existing names
+  plus the most liquid by turnover), so tick days accumulate on the same names;
+- stops cleanly on a Bloomberg data-limit message. The next run resumes from the gaps.
 
-**3. Remove the Sep 10 gap (R03).** The collector skips chunks that already exist, so delete them first:
-```
-bbg_data/intraday_bars/1m/*/*/20260906_20260910.*
-```
-Then run cell 17 (`collect_bars`). This must happen while Sep 10 is still inside Bloomberg's ~140-day
-intraday window, i.e. **before late January 2027**.
+**3. Accumulate ticks (R05).** Bloomberg serves about 1 month of ticks, so 40 full days needs **at least 2 pulls
+about 4 weeks apart**. Re-run the notebook **weekly**, on the same Bloomberg PC folder.
 
-**4. Run the full pipeline:** cells 10 → 13 → 15 → 17 → 19 → 21, or `bbg.run_all(None, skip=('probe',))`.
-Then run cell 25 to bundle.
+**4. Merge, don't replace.** Each run writes `bbg_data_delta_<run>.zip` with only the files it changed.
+Unzip it **into** `data/is2/` (`unzip -o bbg_data_delta_<run>.zip -d data/is2/`). New bar chunks are named
+`<first>_<last>__p<run>.parquet`, so they never overwrite older chunks, and the loaders keep the newest rows.
+Replacing the folder would discard data that has rolled out of Bloomberg's window.
 
-**5. Accumulate ticks (R05).** Bloomberg serves about 1 month of ticks, so 40 full days needs **at least 2 pulls
-about 4 weeks apart**. Weekly is safer. Run cell 19 (`collect_ticks(None)`) each time.
-
-**6. Merge, don't replace.** Unzip each new bundle **into** the existing `data/is2/bbg_data/`, letting new
-files add to old ones. Replacing the folder would discard ticks and bars that have rolled out of
-Bloomberg's window. Chunk and day files are uniquely named, so merging is safe.
-
-**7. Rebuild and gate:**
+**5. Rebuild and gate:**
 ```bash
 uv run hftf data build-features
 uv run hftf data audit --tier research --strict

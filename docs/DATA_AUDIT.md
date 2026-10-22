@@ -125,13 +125,14 @@ participation statistics are biased.
 The exact procedure and the pass/fail gate are in [DATA_READINESS.md](DATA_READINESS.md).
 Status: **pilot tier READY; research tier NOT READY** (R01, R03, R05).
 
-1. **Run the full pull now (`LIMIT = None`)** for at least the 50 Nifty names. Bars before ~June are already
-   rolling off. The universe step already resolved **78 equities**. Fix the 5 unresolved seeds first.
-   `RIL IN Equity` should almost certainly be `RELIANCE IN Equity`. Also check `TTMT IN Equity` (Tata Motors
-   was demerged), `NSENEXT50 Index`, `MIBOR Index` and `RBIRREPO Index` in the Terminal.
-2. **Pull ticks every week** (`bbg_collector.py ticks`), because the ~1-month tick window rolls.
-   Ticks are the high-fidelity data and should be accumulated over time.
-3. Re-pull 2026-09-10 bars, and Oct 21 after the close.
-4. If entitled, start the `depth` forward recorder for a few names.
+1. **Run `Bloomberg_training_pull.ipynb` (`MODE = "pull"`) now.** It pulls all 50 Nifty members plus a small
+   buffer on NSE `IS` tickers. The old collector's "78 equities" double-counted ~28 names through `IN`
+   (composite) seeds, and its 3-stock pass was alphabetical because the index weights are N/A sentinels.
+   Verify `BUFFER_INDEX` (Nifty Next 50) in the Terminal.
+2. **Re-run it every week.** It is gap-driven, so each run fetches only new or missing sessions and tick days.
+   The ~1-month tick window rolls, and ticks accumulate on the fixed names in `reference/tick_universe.json`.
+3. The same run repairs 2026-09-10 and the partial Oct 21, and the NZ1 ASK gap of Jun 3-5 if Bloomberg
+   still serves it. No files need deleting.
+4. If entitled, start the `depth` forward recorder for a few names (`data/is2/bbg_collector.py depth`).
 5. Then re-run `hftf data audit` and `hftf data build-features`. Nothing in the pipeline is
    specific to these 3 stocks.

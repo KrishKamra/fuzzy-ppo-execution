@@ -243,3 +243,4 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 | 2026-10-21 | Parametric impact (square-root + OW transient) with domain randomisation | no depth beyond L1; own impact unidentifiable |
 | 2026-10-21 | Test split = Oct 1-19 (tick days) | highest-fidelity data reserved for final evaluation |
 | 2026-10-21 | eFNN imbalance input = `imb_bar_proxy` on all splits | proxy/tick scale mismatch (std 0.42 vs 0.32) would masquerade as a regime shift between train and test |
+| 2026-10-22 | Training-data pull is gap-driven per session (root notebook), on NSE `IS` tickers, with a fixed tick universe; no options, futures = generics only | the `LIMIT`/chunk-name collector re-downloaded everything, never repaired gaps or partial days, picked names alphabetically (weights are N/A sentinels) and mixed in the `IN` composite book; R05 needs the same names across pulls |

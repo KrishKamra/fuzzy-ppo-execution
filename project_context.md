@@ -374,9 +374,10 @@ available on every bar day.
 **Data readiness:** `uv run hftf data audit --tier research` gives pass/fail against `docs/DATA_READINESS.md`.
 Pilot tier: READY. Research tier: NOT READY (R01 universe 3/50, R03 Sep 10 gap, R05 tick days).
 
-**Data actions (do soon, because the windows roll):** full pull with `LIMIT=None` (≥50 Nifty names);
-weekly tick pulls; re-pull 2026-09-10 bars and Oct 21 after the close; start `depth` forward recording if
-entitled; then re-run `uv run hftf data audit && uv run hftf data build-features`.
+**Data actions (do soon, because the windows roll):** run `Bloomberg_training_pull.ipynb` (`MODE = "pull"`)
+on the Terminal PC now and then weekly. It pulls the 50 Nifty names on NSE `IS` tickers, repairs gaps and
+partial days (Sep 10, Oct 21) and accumulates ticks on a fixed 12-name universe. Start `depth` forward
+recording if entitled; then re-run `uv run hftf data audit && uv run hftf data build-features`.
 
 ---
 

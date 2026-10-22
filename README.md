@@ -23,8 +23,9 @@ uv run hftf data build-features      # corrected 1-min feature table   -> data/p
 ```
 
 The raw data is expected at `data/is2/bbg_data/`. Override that with `HFTF_RAW_DIR`. It is licensed
-Bloomberg data and is git-ignored. To produce it, run `data/is2/bloomberg_data_collection.ipynb` on a
-Bloomberg Terminal machine.
+Bloomberg data and is git-ignored. To produce or extend it, run `Bloomberg_training_pull.ipynb` on a
+Bloomberg Terminal machine (`MODE = "plan"` previews the gaps anywhere; `MODE = "pull"` fetches them). It is
+incremental, so re-run it weekly. See [docs/DATA_READINESS.md](docs/DATA_READINESS.md).
 
 ## Repository layout (uv workspace monorepo)
 
@@ -53,8 +54,8 @@ There are 3 Nifty-50 stocks (Adani Enterprises, Adani Ports, Apollo Hospitals), 
 1-minute TRADE/BID/ASK bars (Jun-Oct 2026), 20 sessions of ~1 s conflated L1 ticks, index and futures
 context, and 15 years of daily history. The audit found and fixed inflated tick volumes (2-76×),
 transiently crossed quotes, and missing tick/lot sizes. It also rebuilt L1 imbalance for the days without
-ticks using a bar-level proxy (ρ ≈ 0.77-0.86 against ticks). This pull is a pilot, so a larger pull is the
-top data action.
+ticks using a bar-level proxy (ρ ≈ 0.77-0.86 against ticks). This pull is a pilot. The research-tier
+pull (≥50 stocks) is `Bloomberg_training_pull.ipynb`.
 
 ## License
 

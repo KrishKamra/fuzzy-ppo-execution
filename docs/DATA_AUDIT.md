@@ -1,7 +1,7 @@
 # Data Audit: Bloomberg pull (`data/is2/bbg_data`)
 
-Audited 2026-10-21. Reproduce with `uv run hftf data audit` (writes `docs/data/data_audit.json`) and
-`uv run hftf data build-features` (writes `data/processed/features_1m_v2.parquet`).
+Audited 2026-10-21, finalised 2026-10-22 (F10, F11). Reproduce with `uv run hftf data build-features`
+(writes `data/processed/features_1m_v3.parquet`), then `uv run hftf data audit` (writes `docs/data/data_audit.json`).
 
 ## Verdict
 
@@ -10,7 +10,8 @@ L1 order-book imbalance, spread and spread variance, realized volatility, the vo
 market context. For a credible paper or thesis, though, it is thin: **3 stocks × 96 sessions of 1-minute
 bars and 20 sessions of conflated L1 ticks.** That is enough to build and debug the full pipeline and
 to show regime-dependent behaviour. It is not enough for strong out-of-sample claims. The
-collector notebook confirms this was the `LIMIT = 3` smoke-test pass.
+collector notebook confirms this was the `LIMIT = 3` smoke-test pass. **The pull is now frozen** (no further
+pulls in this project's scope). `features_1m_v3` is the final dataset (F11), and the readiness gate is READY (12/12).
 
 ## What was delivered
 
@@ -73,13 +74,46 @@ It appears in index-membership weights (all of them, so the weights are unusable
 `loaders.clean_sentinels` converts it to NaN.
 
 ### F7. Calendar gaps
-- **2026-09-10 was a trading session, but its bars are missing** for 8 of 9 TRADE instruments and for
-  all BID/ASK series except ADE. This is a collection gap. It is still inside Bloomberg's intraday window,
-  so **re-pull it**.
+- **2026-09-10 was a trading session, but its bars are missing** for 8 of 9 TRADE instruments and for every
+  BID/ASK series except ADE ASK (ADE has TRADE and ASK but no BID). This is a collection gap. With the pull
+  frozen, the session is **dropped whole** from the feature table for every stock (F11), not imputed.
 - Exchange holidays, legitimately empty: Jun 26, Sep 14, Oct 2, Oct 20.
 - FX also lacks Aug 26 (an FX-market holiday).
-- Oct 21 is a partial session (data ends ~12:05 IST). `dq_partial_day` flags it, and it is excluded from training.
+- Oct 21 is a partial session (data ends ~12:05 IST). `dq_partial_day` flags it, and it is `split = excluded`.
+- NZ1 ASK lacks Jun 3-5. No feature uses futures quotes, so no action is needed.
 - Daily NIFTY/BANKNIFTY rows include weekends with all-NaN prices. The loaders drop them.
+
+### F10. Closing call auction from 2026-08-03 (handled: the grid ends at 15:15)
+Through 2026-07-31 every stock trades continuously until 15:30. From 2026-08-03 (all 53 later sessions),
+the 15:15-15:30 window has at most 2 one-minute bars. Its ticks are indicative `T` prints with zero-price
+quotes, and an `AUC` (auction uncross) print lands at ~15:29:40. That is a closing call auction. It was
+measured from the data, not taken from an NSE circular, so check a circular before quoting it.
+v2 put those 15 minutes on the grid as zero-volume, stale-price "trading" minutes, which an agent could have
+learned to trade into. → `calendar.GRID_END`: the grid is 09:15-15:15 (360 min) on **every** day, so train
+(days before and after the change), val and test share one market structure. The pre-August days lose their
+real 15:15-15:30 trading. `dq_offbook_frac` shows it (median 10% before the change, 3% after). The auction
+itself (executing a residual at the close) is not modelled in v1.
+
+### F11. Final dataset gap policy (`features_1m_v3`)
+Every value is observed, carried forward inside its own session, or estimated over a shorter window during
+warm-up. Every carried or estimated value is flagged. Nothing is synthesised.
+- **A session is kept only if its TRADE, BID, ASK and context bars all exist.** This drops 2026-09-10 for all
+  three stocks.
+- **Within-session fills:** a minute with no TRADE bar gets volume 0 and OHLC = last close (`fill_trade`).
+  A minute with no BID/ASK bar carries the last quote (`fill_quote`). Almost all of these are on the excluded
+  Oct 21 afternoon; only 1 and 4 rows are in usable sessions. Context
+  index bars are carried forward the same way before differencing.
+- **Warm-up:** rolling statistics need at least 3 same-session observations. Realised variance over n < w
+  returns is scaled by w/n, and inside the first w minutes `ret_w` is the return since the open
+  (`dq_warmup` marks mso < 30). v2 left 10-60 minutes NaN after every open.
+- **Exclusions** (`split = excluded`): the profile burn-in days (Jun 3-5, `dq_burnin`) and the partial Oct 21.
+- **Not clipped:** spreads up to 56 bps and 1-min moves of about 1.2% are real prints on heavy volume.
+  Winsorising is the env normaliser's job, fitted on train.
+- **Added inputs:** `imb_bar_proxy_ema5`, `log_spread_var_30m`, `log_rv_30m` (`env.yaml` `regime_inputs`).
+
+The result is 92 usable sessions per stock (train 60, val 20, test 12), 98,256 episode rows, and 0 NaN in
+the R12 columns. `data/processed/features_1m_v3.manifest.json` records what was dropped, the fill shares
+and the train-only statistics.
 
 ### F8. Off-book volume days (flagged)
 On 2026-08-31, 09-18 and 09-29, continuous-session bar volume is only 42-65% of Bloomberg daily volume
@@ -104,35 +138,29 @@ participation statistics are biased.
 | median daily RV (bps) | 145 | 116 | 97 |
 | median L1 depth, bid+ask (shares) | 123 | 209 | 74 |
 
-- **U-shaped intraday volume:** the first 30 min carry ≈16% of the day and the last hour ≈34%.
-  Spreads are widest at the open (2.8 bps) and in the final 15 minutes (3.8 bps).
+- **U-shaped intraday volume:** on the 09:15-15:15 grid, the first 30 min carry ≈15% of the day and the
+  last hour (14:15-15:15) ≈22%. Both figures hold before and after the auction change. Spreads are widest in
+  the first 5 minutes (3.5 bps). Before the change, 15:15-15:30 was wide too (3.8 bps), but those minutes are
+  now off the grid.
 - **L1 depth is tiny next to any realistic parent order:** 1% of ADV is roughly 100× L1 depth.
   Price impact has to be modelled, not read off the book.
-- **The three eFNN regime inputs are nearly orthogonal:** Spearman |ρ| ≤ 0.28 between imbalance,
+- **The three eFNN regime inputs are nearly orthogonal:** Spearman |ρ| ≤ 0.29 between imbalance (5-min EMA),
   30-min spread variance and 30-min RV. Each adds information to the fuzzy partition.
 
 ## What cannot be recovered from this pull
 - **Book depth beyond L1** (levels 2-5). The fill simulator therefore uses a parametric impact model,
   calibrated per stock, instead of replaying a full book. Getting depth needs a forward recording via
-  `//blp/mktdepthdata` (`bbg_collector.py depth`), if entitled.
+  `//blp/mktdepthdata` (`bbg_collector.py depth`, in git history), if entitled.
 - **Our own order's interaction with the queue.** Any historical backtest is counterfactual. Impact
   and limit-order fill probability are model assumptions, and they must be stated as such.
 - **Intraday history before 2026-06-03.** Bloomberg serves about 140 days of bars and about 1 month of ticks
   on a rolling basis. Anything not pulled now is lost.
 
-## Actions before scaling up (priority order)
+## Status and what remains
 
-The exact procedure and the pass/fail gate are in [DATA_READINESS.md](DATA_READINESS.md).
-Status: **pilot tier READY; research tier NOT READY** (R01, R03, R05).
+The pass/fail gate is in [DATA_READINESS.md](DATA_READINESS.md). Status: **READY (12/12)**. Every transformation is logged in
+[DATA_TRANSFORMS.md](DATA_TRANSFORMS.md).
 
-1. **Run `Bloomberg_training_pull.ipynb` (`MODE = "pull"`) now.** It pulls all 50 Nifty members plus a small
-   buffer on NSE `IS` tickers. The old collector's "78 equities" double-counted ~28 names through `IN`
-   (composite) seeds, and its 3-stock pass was alphabetical because the index weights are N/A sentinels.
-   Verify `BUFFER_INDEX` (Nifty Next 50) in the Terminal.
-2. **Re-run it every week.** It is gap-driven, so each run fetches only new or missing sessions and tick days.
-   The ~1-month tick window rolls, and ticks accumulate on the fixed names in `reference/tick_universe.json`.
-3. The same run repairs 2026-09-10 and the partial Oct 21, and the NZ1 ASK gap of Jun 3-5 if Bloomberg
-   still serves it. No files need deleting.
-4. If entitled, start the `depth` forward recorder for a few names (`data/is2/bbg_collector.py depth`).
-5. Then re-run `hftf data audit` and `hftf data build-features`. Nothing in the pipeline is
-   specific to these 3 stocks.
+The data work is done. If a later project extends the data, the gap-driven pull notebook is in git history
+(`de800d8`, `Bloomberg_training_pull.ipynb`). Pull only the names and sessions needed, and merge the delta
+**into** `data/is2/`. Nothing in the pipeline is specific to these 3 stocks.

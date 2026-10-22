@@ -14,11 +14,7 @@ htmlcov/
 # Licensed market data (Bloomberg) and derived artefacts: never commit
 data/*
 !data/README.md
-!data/is2/
-data/is2/*
-!data/is2/bbg_collector.py
-!data/is2/bloomberg_data_collection.ipynb
-# Collector bundles (bundle_for_mac)
+# Bloomberg bundles
 *.zip
 # Audit output contains per-day Bloomberg volumes/prices; regenerate with `hftf data audit`
 docs/data/

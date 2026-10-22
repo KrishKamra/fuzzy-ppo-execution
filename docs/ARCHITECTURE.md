@@ -23,7 +23,7 @@ end-to-end by the PPO actor-critic losses, which include the Bellman (TD/GAE) va
 ```mermaid
 flowchart LR
   subgraph data[hftf-data]
-    RAW[(Bloomberg raw<br/>bars, ticks, daily)] --> CLEAN[clean + derive<br/>F1-F6 fixes] --> FEAT[(features_1m_v2<br/>causal table)]
+    RAW[(Bloomberg raw<br/>bars, ticks, daily)] --> CLEAN[clean + derive<br/>F1-F11 fixes] --> FEAT[(features_1m_v3<br/>final causal table)]
   end
   subgraph sim[hftf-sim]
     FEAT --> SAMP[EpisodeSampler] --> ENV[ExecutionEnv<br/>vectorised]
@@ -51,10 +51,13 @@ flowchart LR
 ## 3. Data layer (`hftf-data`), built
 
 - Raw Bloomberg pull (read-only) → `loaders` → `ticks` (cleaning) / `derive` (missing quantities) →
-  `features.build_feature_table` → `data/processed/features_1m_v2.parquet`.
+  `features.build_feature_table` → `data/processed/features_1m_v3.parquet` (+ manifest), the final dataset.
 - **Invariant:** a row stamped `time` (bar start, UTC) uses only information available at
   `decision_time = time + 1 min`. Rolling windows reset each session. The volume profile uses previous
   sessions only. Daily features are lagged one session.
+- **Grid and gaps:** 09:15-15:15 IST (360 min) every day, because there is a closing call auction from
+  2026-08-03. Incomplete sessions are dropped whole and never imputed. Within-session fills are flagged
+  (`fill_trade`, `fill_quote`), as are warm-up estimates (`dq_warmup`). Each row has a `split` label (DATA_AUDIT F10-F11).
 - See `docs/DATA_AUDIT.md` for the quirks and fixes, and `project_context.md §Data` for the column dictionary.
 
 ## 4. Execution environment (`hftf-sim`)
@@ -63,7 +66,7 @@ flowchart LR
 | Item | v1 choice | Notes |
 |---|---|---|
 | Unit | (stock, session, `t0`, `H`, side, `Q`) | sampled by `EpisodeSampler` |
-| Horizon `H` | {30, 60, 120} min | `t0` uniform on [09:20, 15:30 − H]; avoid the first 5 min |
+| Horizon `H` | {30, 60, 120} min | `t0` uniform on [09:20, 15:15 − H]; avoid the first 5 min; the grid ends at 15:15 (closing auction) |
 | Size `Q` | `ρ · Σ_{t0}^{t0+H} prof_avg_vol` with `ρ ~ LogUniform[1%, 20%]` | expected participation |
 | Side | buy / sell, 50/50 | the env is side-symmetric through signed prices |
 | Decision step Δ | 1 min (BarSim) | TickSim later: 5-15 s on tick days |
@@ -177,8 +180,9 @@ include the fuzzy structure (R varies).
 ## 7. Evaluation (`hftf-eval`)
 
 - **Splits (walk-forward by date, train statistics only):** train 2026-06-03 → 08-31; val 09-01 → 09-30;
-  test 10-01 → 10-19, all of which are tick days. 10-21 is excluded as partial. A secondary
-  generalisation check is leave-one-stock-out.
+  test 10-01 → 10-19, all of which are tick days. That gives 60 / 20 / 12 sessions per stock. 06-03 → 06-05
+  (profile burn-in) and the partial 10-21 are `excluded`, and 09-10 is absent. A secondary generalisation
+  check is leave-one-stock-out.
 - **Baselines:** immediate (all at t0), TWAP, VWAP (profile), POV(10%), Almgren-Chriss (closed form,
   same σ/η/λ), PPO-MLP, PPO + static fuzzy (ANFIS, no evolution), and **PPO + eFNN (ours)**.
 - **Ablations:** antecedent gradients off / value-only; evolution off; regime inputs swapped for raw
@@ -216,7 +220,7 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 
 | | Deliverable | Exit criterion |
 |---|---|---|
-| **M0** ✅ | uv workspace, data audit, features v2 | `hftf data audit` passes; tests green |
+| **M0** ✅ | uv workspace, data audit, final features v3 | `hftf data audit --strict` passes (12/12); tests green |
 | **M1** | `hftf-sim` + TWAP/VWAP/AC baselines | share conservation and causality tests; TWAP IS ≈ analytic AC cost under the linear-impact config |
 | **M2** | PPO-MLP | beats VWAP on train; val gap reported |
 | **M3** | static fuzzy → evolving fuzzy | rule add/merge/prune logged; no PPO instability at edits (KL spikes < target) |
@@ -225,9 +229,9 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 
 ## 10. Key risks
 
-- **Small data → overfitting:** 3 stocks and about 62 training sessions. Mitigations: many episodes per
+- **Small data → overfitting:** 3 stocks and 60 training sessions. Mitigations: many episodes per
   session (random `t0`, `H`, `Q`, side), domain randomisation, small networks, early stopping on val.
-  The real fix is the full Bloomberg pull (DATA_AUDIT, Actions).
+  The data is frozen, so state this limitation in the report and lean on the leave-one-stock-out check.
 - **Impact-model dependence:** results are conditional on the simulator. We report robustness sweeps and
   never claim real-world savings without live data.
 - **Non-stationary architecture in PPO:** edits happen only between iterations, are function-preserving,
@@ -244,3 +248,6 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 | 2026-10-21 | Test split = Oct 1-19 (tick days) | highest-fidelity data reserved for final evaluation |
 | 2026-10-21 | eFNN imbalance input = `imb_bar_proxy` on all splits | proxy/tick scale mismatch (std 0.42 vs 0.32) would masquerade as a regime shift between train and test |
 | 2026-10-22 | Training-data pull is gap-driven per session (root notebook), on NSE `IS` tickers, with a fixed tick universe; no options, futures = generics only | the `LIMIT`/chunk-name collector re-downloaded everything, never repaired gaps or partial days, picked names alphabetically (weights are N/A sentinels) and mixed in the `IN` composite book; R05 needs the same names across pulls |
+| 2026-10-22 | **Supersedes the row above.** The pull is frozen and the pull notebook is retired (it stays in git history at `de800d8`). The gate is the new `final` readiness tier | university scope; the full pull ran for 20+ min and returned far more data than needed; the research tier's 50 names and 40 tick days cannot be produced by processing |
+| 2026-10-22 | Final dataset `features_1m_v3`: a 09:15-15:15 grid on every day; incomplete sessions dropped whole (Sep 10); flagged within-session last-observation fills; partial-window warm-up estimators; a `split` column | closing call auction from 2026-08-03 (DATA_AUDIT F10); imputing a whole session would fabricate data; R12 makes every episode row complete so the env never imputes |
+| 2026-10-22 | One readiness gate (no tiers); the collector tooling leaves the repo (git history `de800d8`); every transformation is logged in `docs/DATA_TRANSFORMS.md` | the pull is frozen, so pilot/research tiers and pull tooling have no remaining use; the audit stays because R06-R12 guard the cleaning and feature code |

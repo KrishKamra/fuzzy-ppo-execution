@@ -18,9 +18,11 @@
 - **Learning:** the PPO policy loss and the Bellman/GAE value loss back-propagate into the Gaussian
   membership centres and widths. Structural rule edits happen between PPO iterations.
 - **Data:** Bloomberg (blpapi) pull for 3 Nifty-50 stocks (ADE, ADSEZ, APHS). It has 96 sessions of 1-min
-  bars, 20 sessions of conflated L1 ticks, and 15 years of daily data.
-- **State (2026-10-21):** M0 done. That covers the uv monorepo, the data audit, the corrected feature
-  table `features_1m_v2`, and tests. Next is M1: the execution simulator and classical baselines.
+  bars, 20 sessions of conflated L1 ticks, and 15 years of daily data. **The pull is frozen.** The final
+  table `features_1m_v3` has 92 usable sessions per stock (train 60 / val 20 / test 12) on a 09:15-15:15 grid.
+- **State (2026-10-22):** M0 done. That covers the uv monorepo, the data audit, the final feature table
+  `features_1m_v3` (readiness gate READY, 12/12), and tests. Next is M1: the execution simulator and
+  classical baselines.
 
 ---
 
@@ -64,8 +66,9 @@
 |---|---|---|
 | Pre-open order entry | 09:00-09:08 | Call auction. Bloomberg shows BID/ASK **price 0.0** (no visible book). |
 | Pre-open matching + buffer | 09:08-09:15 | Opening price discovered. `AOB` print ≈ 09:08-09:09. |
-| **Continuous trading** | **09:15-15:30** | **The only phase the agent trades in.** 375 one-minute bars. |
-| Close / post-close | 15:30-16:00 | The closing price is a VWAP of the final 30 minutes. A post-close session trades at the close (not modelled). |
+| **Continuous trading** | **09:15-15:30 until 2026-07-31; 09:15-15:15 from 2026-08-03** | **The agent trades only 09:15-15:15 on every day** (360 one-minute bars; DATA_AUDIT F10). |
+| Closing call auction | 15:15-~15:30 from 2026-08-03 | Measured in our data: indicative `T` prints, zero-price quotes, `AUC` uncross at ~15:29:40. Not modelled in v1. |
+| Close / post-close | 15:30-16:00 | A post-close session trades at the close (not modelled). |
 
 ### 3.2 Tick size, lot size, price bands
 - **Tick size follows price bands** (verify against current NSE circulars): `<₹250: 0.01`,
@@ -101,9 +104,10 @@ toward infinitely many tiny slices. Report fees separately from IS so the learna
 | median daily RV | 145 bps | 116 bps | 97 bps |
 | median L1 depth (bid+ask) | 123 sh | 209 sh | 74 sh |
 
-- **U-shaped intraday volume:** the first 30 min ≈ 16% of the day's volume, minutes 30-330 ≈ 5.5-7% per
-  half hour, and the last hour ≈ 34%. RV is highest at the open. **Spreads widen at the open (2.8 bps) and
-  in the last 15 min (3.8 bps).** Leaving residual inventory to the final minutes is expensive.
+- **U-shaped intraday volume** (09:15-15:15 grid): the first 30 min ≈ 15% of the day's volume and the last
+  hour ≈ 22%, both before and after the auction change. RV is highest at the open. **Spreads are widest in
+  the first 5 min (3.5 bps).** Before August, 15:15-15:30 was wide too (3.8 bps), but those minutes are now
+  the auction and are off the grid. A residual forced at the horizon pays impact on a thin touch.
 - **L1 depth is tiny:** 1% of ADV is about 100× the displayed touch. Every non-trivial child walks the book,
   so price impact has to be modelled (§4.3), not read from data.
 
@@ -144,7 +148,7 @@ remaining inventory is `x(t) = X · sinh(κ(T−t)) / sinh(κT)` with `κ ≈ �
 | **Imbalance** favouring our side's direction (bid-heavy while buying) | Front-load | L1 imbalance predicts short-horizon mid moves; buy before the price lifts |
 | Imbalance against us (ask-heavy while buying) | Slow down | Price is likely to drift in our favour |
 | Low **relative volume** | Slow down | Impact ∝ `q/V` |
-| Approaching the close | Avoid a large residual | Spreads widen 2× in the final 15 min; forced liquidation is costly |
+| Approaching the horizon | Avoid a large residual | The forced residual walks a thin L1 book; impact is concave but not free |
 
 "High Volatility / Low Liquidity" and "Trend Bullish" are human names for regions of this input space.
 The eFNN discovers its own regions, and §5.4 maps them back to such names.
@@ -204,7 +208,7 @@ flag `antecedent_grad ∈ {all, value_only, none}` makes this an explicit ablati
 
 ### 6.1 Episodes
 `(stock, session, t0, H ∈ {30,60,120} min, side ∈ {buy,sell}, Q = ρ·expected volume over the horizon, ρ ~ LogU[1%,20%])`,
-with `t0 ∈ [09:20, 15:30−H]`. Decision step Δ = 1 min. The residual is force-executed at the horizon.
+with `t0 ∈ [09:20, 15:15−H]`. Decision step Δ = 1 min. The residual is force-executed at the horizon.
 
 ### 6.2 Observation
 - `x` (to the eFNN): `imb_bar_proxy` (5-min EMA), `log(spread_var_30m+ε)`, `log(rv_30m+ε)`.
@@ -244,17 +248,19 @@ simulator, and networks stay small.
 | `daily/daily_<class>` | 6 equities (+ACC, ACEM, ARBP daily only), 3 indices, 3 futures, FX, rates, commodities, 3 Nifty options | 2011-10-21 → 2026-10-21 | OHLCV, vols, implied vol, adjusted + raw prices |
 | `reference/` | static per class, Nifty membership, futures/options chains, field validation | snapshot | |
 | `events/` | dividends, earnings dates | history | |
-| `features/features_1m.parquet` | collector output | | **Defective: use `data/processed/features_1m_v2.parquet`** |
+| `features/features_1m.parquet` | collector output | | **Defective: use `data/processed/features_1m_v3.parquet`** |
 
-### 7.2 `features_1m_v2` column dictionary (108,375 rows × 83 cols; one row per security × session minute)
+### 7.2 `features_1m_v3` column dictionary (103,680 rows × 91 cols; one row per security × session minute)
 `time` is the bar **start** (UTC). Every value in a row is known at `decision_time = time + 1 min`.
 
 | Group | Columns | Notes |
 |---|---|---|
-| Identity / time | `security`, `time`, `decision_time`, `date` (IST session date), `mso` (minutes since 09:15), `min_to_close`, `tick_size` | grid = 375 min/session |
-| Bars | `o`, `h`, `l`, `c`, `volume`, `n_events`, `value` | no-trade minutes: volume 0, OHLC = last close |
-| Quotes | `bid`, `ask`, `mid`, `px` (mid, else close), `spread_bps`, `spread_ticks` | last quote in the minute, ffilled within the day |
-| Returns / vol | `ret_1m`, `ret_{5,15,30,60}m`, `rv_{5,15,30,60}m`, `parkinson_30m` | log mid returns, not annualised; reset each session |
+| Identity / time | `security`, `time`, `decision_time`, `date` (IST session date), `mso` (minutes since 09:15), `min_to_close`, `tick_size` | grid = 09:15-15:15 IST, 360 min/session |
+| Split | `split ∈ {train, val, test, excluded}` | from `configs/env.yaml`; `excluded` = partial day or profile burn-in |
+| Bars | `o`, `h`, `l`, `c`, `volume`, `n_events`, `value` | no-trade minutes: volume 0, OHLC = last close (`fill_trade`) |
+| Quotes | `bid`, `ask`, `mid`, `px` (mid, else close), `spread_bps`, `spread_ticks` | last quote in the minute, ffilled within the day (`fill_quote`) |
+| Returns / vol | `ret_1m`, `ret_{5,15,30,60}m`, `rv_{5,15,30,60}m`, `parkinson_30m` | log mid returns, not annualised; reset each session; in the first `w` min: `ret` since the open, `rv` rescaled by w/n (`dq_warmup`) |
+| Regime inputs | `imb_bar_proxy_ema5`, `log_spread_var_30m`, `log_rv_30m` | the eFNN `x` (§6.2); log offset ε = 1e-8 |
 | Spread dynamics | `spread_var_{15,30,60}m`, `spread_mean_30m` | variance of `spread_bps` (bps²) |
 | Volume / VWAP | `turnover`, `cumvol`, `vwap_run`, `dev_vwap_bps` | session-to-date VWAP |
 | Volume profile | `prof_share`, `prof_cum_share`, `prof_avg_vol`, `rel_volume` | previous 20 sessions only (causal) |
@@ -264,10 +270,10 @@ simulator, and networks stay small.
 | Unified L1 | `l1_imb`, `l1_imb_source ∈ {tick, bar_proxy, none}`, `has_ticks` | for analysis; **not** an eFNN input (§6.2) |
 | Market context | `ctx_nifty_ret_1m`, `ctx_nifty_ret_30m`, `ctx_nifty_rv_30m`, `ctx_banknifty_ret_1m`, `ctx_banknifty_ret_30m`, `ctx_vix`, `ctx_vix_chg_30m` | same-minute index bars |
 | Daily (lagged 1 session) | `d_ret_1d`, `d_vol_20d` (annualised), `d_adv_20d`, `d_range_pct`, `d_amihud_20d`, `d_ivol_30d`, `d_volume` | known before the open |
-| Data quality | `dq_partial_day`, `dq_offbook_frac` | filter/flag only; not model inputs |
+| Data quality | `dq_partial_day`, `dq_burnin`, `dq_warmup`, `dq_offbook_frac`, `fill_trade`, `fill_quote` | filter/flag only; not model inputs |
 | Eval only | `regime_eval_prevday ∈ {low, mid, high}` | previous-day RV tercile. **Never a model input** |
 
-### 7.3 Raw-data quirks and their fixes (details: DATA_AUDIT F1-F9)
+### 7.3 Raw-data quirks and their fixes (details: DATA_AUDIT F1-F11)
 | Quirk | Fix |
 |---|---|
 | Ticks are ~1 s conflated snapshots. `T` prints are cumulative and `ACB` is a day total | Keep only untagged + `BC` prints in 09:15-15:30. They reconcile to bar volume at 0.9996-1.0005 |
@@ -275,7 +281,10 @@ simulator, and networks stay small.
 | Pre-open quotes have price 0.0 | Masked to NaN; trading only in the continuous session |
 | `-2.424536e-14` sentinel (weights, EPS) | → NaN (`loaders.clean_sentinels`) |
 | `TICK_SIZE`, `TRADING_LOT_SIZE` not returned | Tick inferred from the price grid and checked against the NSE rule; equity lot = 1 |
-| 2026-09-10 bars missing (8/9 instruments) | Collection gap. Re-pull |
+| 2026-09-10 bars missing (8/9 instruments; ADE has no BID) | Collection gap. The session is dropped whole for every stock, never imputed |
+| Closing call auction from 2026-08-03 (15:15-15:30) | Grid ends at 15:15 on every day |
+| Missing minutes inside a session (5 rows in usable sessions) | Last observation carried within the session and flagged (`fill_trade`, `fill_quote`) |
+| Rolling windows NaN after the open | Partial-window estimators over at least 3 same-session observations (`dq_warmup`) |
 | Holidays Jun 26, Sep 14, Oct 2, Oct 20 | Legitimately empty |
 | Oct 21 partial (to ~12:05 IST) | `dq_partial_day`; excluded |
 | Aug 31, Sep 18, Sep 29: bars hold only 42-65% of daily volume | `dq_offbook_frac`; kept, flagged |
@@ -290,10 +299,10 @@ available on every bar day.
 ### 7.5 Splits (walk-forward by date; counts from the data)
 | Split | Dates | Sessions | Tick days |
 |---|---|---|---|
-| train | 2026-06-03 → 08-31 | 63 | 0 |
-| val | 2026-09-01 → 09-30 | 21 for ADE, 20 for ADSEZ/APHS (09-10 missing) | 8 |
+| train | 2026-06-08 → 08-31 | 60 | 0 |
+| val | 2026-09-01 → 09-30 (09-10 absent) | 20 | 8 |
 | test | 2026-10-01 → 10-19 | 12 | 12 |
-| excluded | 2026-10-21 (partial) | 1 | 1 |
+| excluded | 2026-06-03 → 06-05 (profile burn-in), 2026-10-21 (partial) | 4 | 1 |
 
 ---
 
@@ -337,9 +346,11 @@ available on every bar day.
 
 ## 10. Known limitations and pitfalls
 
-- **Tiny universe:** 3 stocks and 63 training sessions. Overfitting is the default outcome. Mitigations:
-  episode augmentation, domain randomisation, small networks, early stopping on val. The real fix is the
-  full Bloomberg pull.
+- **Tiny universe:** 3 stocks and 60 training sessions. Overfitting is the default outcome. Mitigations:
+  episode augmentation, domain randomisation, small networks, early stopping on val, and a
+  leave-one-stock-out check. The pull is frozen, so state this limit in the report.
+- **Structural break inside train:** the closing auction starts 2026-08-03, so 39 train sessions come before
+  it and 21 after. The common 15:15 grid removes the mechanical difference. Report val/test results knowing that.
 - **Conflated ticks:** about 1 s snapshots. Queue dynamics, true OFI at event resolution, and sub-second
   effects are unobservable.
 - **No L2 depth:** impact is parametric, and all results are conditional on the simulator.
@@ -364,20 +375,18 @@ available on every bar day.
 
 | Milestone | Status |
 |---|---|
-| M0: uv workspace, data audit, `features_1m_v2`, tests | **done** |
+| M0: uv workspace, data audit, final `features_1m_v3`, tests | **done** |
 | M1: `hftf-sim` (BatchEnv, ImpactModel, FeeModel, EpisodeSampler) + TWAP/VWAP/AC | next |
 | M2: PPO-MLP | planned |
 | M3: static fuzzy → evolving fuzzy | planned |
 | M4: experiments, ablations, robustness, report | planned |
 | M5: full-universe data, TickSim, limit orders | planned |
 
-**Data readiness:** `uv run hftf data audit --tier research` gives pass/fail against `docs/DATA_READINESS.md`.
-Pilot tier: READY. Research tier: NOT READY (R01 universe 3/50, R03 Sep 10 gap, R05 tick days).
+**Data readiness:** `uv run hftf data build-features && uv run hftf data audit --strict` gives pass/fail
+against `docs/DATA_READINESS.md`: **READY, 12/12**. Every transformation is logged in `docs/DATA_TRANSFORMS.md`.
 
-**Data actions (do soon, because the windows roll):** run `Bloomberg_training_pull.ipynb` (`MODE = "pull"`)
-on the Terminal PC now and then weekly. It pulls the 50 Nifty names on NSE `IS` tickers, repairs gaps and
-partial days (Sep 10, Oct 21) and accumulates ticks on a fixed 12-name universe. Start `depth` forward
-recording if entitled; then re-run `uv run hftf data audit && uv run hftf data build-features`.
+**Data actions:** none. The pull is frozen (ARCHITECTURE decision log, 2026-10-22), and the retired pull
+notebook and the collector are in git history at `de800d8`.
 
 ---
 
@@ -418,6 +427,6 @@ generated:      2026-10-21 (Claude Code, from docs/prompts/project_context_promp
 git commit:     none (repository initialised, no commits yet)
 data snapshot:  Bloomberg pull 2026-10-21 06:44-07:00 UTC (LIMIT=3 pass)
 sources read:   docs/ARCHITECTURE.md, docs/DATA_AUDIT.md, docs/data/data_audit.json,
-                packages/hftf-data/src/hftf_data/*.py, data/processed/features_1m_v2.parquet,
+                packages/hftf-data/src/hftf_data/*.py, data/processed/features_1m_v3.parquet,
                 data/is2/bbg_collector.py, pyproject.toml, packages/*/pyproject.toml
 ```

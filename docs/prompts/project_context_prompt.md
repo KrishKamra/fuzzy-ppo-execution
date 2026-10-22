@@ -26,9 +26,9 @@ functions (centres/widths), together with the actor-critic heads. Data: NSE equi
    questions". Never silently diverge.
 2. `docs/DATA_AUDIT.md` and `docs/data/data_audit.json`: what data exists, its quirks, and the fixes.
 3. `packages/hftf-data/src/hftf_data/*.py`: the actual column names and semantics. Read
-   `data/processed/features_1m_v2.parquet` with pandas (via `uv run python`) to list the real columns,
+   `data/processed/features_1m_v3.parquet` with pandas (via `uv run python`) to list the real columns,
    dtypes and coverage. **Never document a column you have not seen in the file.**
-4. `data/is2/bbg_collector.py` header and config: how the data was pulled, and with which tickers and fields.
+4. `docs/DATA_TRANSFORMS.md`: every cleaning, imputation and transformation step (the collector that pulled the data is in git history at `de800d8`).
 5. `pyproject.toml` and each `packages/*/pyproject.toml`: the workspace layout and dependencies.
 
 ## Required sections (in this order)
@@ -59,7 +59,7 @@ functions (centres/widths), together with the actor-critic heads. Data: NSE equi
    reward (and why it telescopes to the AC objective), episode sampling, γ = 1 with finite horizon, PPO
    hyperparameters, normalisation. Note the CPU-only constraint.
 7. **Data**: (a) inventory table (dataset, instruments, date range, granularity); (b) **column
-   dictionary for `features_1m_v2`**, grouped (identity/time, prices, spread, volatility, volume/profile,
+   dictionary for `features_1m_v3`**, grouped (identity/time, prices, spread, volatility, volume/profile,
    L1 microstructure, context, daily-lagged, data-quality, eval-only), with units and causality notes;
    (c) every raw-data quirk with its fix (condition codes, conflation, zero pre-open quotes, sentinel,
    calendar gaps, off-book days); (d) the imbalance proxy and its measured correlation; (e) splits by date

@@ -1,7 +1,7 @@
 """Pass/fail data-readiness checks over an audit report (docs/DATA_READINESS.md).
 
-Thresholds live in configs/data_readiness.yaml. Coverage requirements depend on the tier (pilot or
-research); integrity requirements are the same for every tier.
+Thresholds live in configs/data_readiness.yaml: coverage of the frozen pull, and integrity of the raw
+data and the final feature table.
 """
 
 from __future__ import annotations
@@ -27,11 +27,9 @@ class Check:
     detail: str = ""
 
 
-def load_thresholds(tier: str, path: Path = DEFAULT_THRESHOLDS) -> dict:
+def load_thresholds(path: Path = DEFAULT_THRESHOLDS) -> dict:
     cfg = yaml.safe_load(path.read_text())
-    if tier not in cfg["tiers"]:
-        raise ValueError(f"unknown tier {tier!r}; choose from {sorted(cfg['tiers'])}")
-    return {**cfg["tiers"][tier], **cfg["integrity"]}
+    return {**cfg["coverage"], **cfg["integrity"]}
 
 
 def _fails(values: dict, ok) -> str:
@@ -73,16 +71,25 @@ def evaluate(report: dict, th: dict, features: pd.DataFrame | None = None) -> li
 
     tracked = [(safe_name(s), ev) for s in equities for ev in ("TRADE", "BID", "ASK")]
     tracked += [(safe_name(s), "TRADE") for s in th["context_instruments"]]
-    missing = {f"{s}/{ev}": len(bars.get((s, ev), {}).get("missing_sessions", [])) for s, ev in tracked}
+    # An acknowledged gap is dropped whole from the feature table, so it does not count as missing.
+    acked = set(th.get("acknowledged_missing_sessions", []))
+
+    def gaps(s, ev):
+        return [d for d in bars.get((s, ev), {}).get("missing_sessions", []) if d not in acked]
+
+    missing = {f"{s}/{ev}": len(gaps(s, ev)) for s, ev in tracked}
     worst = max(missing.values(), default=0)
-    dates = sorted({d for s, ev in tracked for d in bars.get((s, ev), {}).get("missing_sessions", [])})
+    dates = sorted({d for s, ev in tracked for d in gaps(s, ev)})
+    detail = f"dates: {', '.join(dates)}" if dates else ""
+    if acked:
+        detail = "; ".join(x for x in (detail, f"acknowledged (dropped): {', '.join(sorted(acked))}") if x)
     add(
         "R03",
         "missing trading sessions in bar window",
         worst <= th["max_missing_bar_sessions"],
         f"max {worst}",
         f"<= {th['max_missing_bar_sessions']}",
-        f"dates: {', '.join(dates)}" if dates else "",
+        detail,
     )
 
     absent = [s for s in th["context_instruments"] if not bars.get((safe_name(s), "TRADE"), {}).get("rows")]
@@ -171,11 +178,12 @@ def evaluate(report: dict, th: dict, features: pd.DataFrame | None = None) -> li
     if features is None:
         add(
             "R11",
-            "features_1m_v2 built and covering eFNN inputs",
+            "feature table built and covering eFNN inputs",
             False,
             "not built",
             "run `hftf data build-features`",
         )
+        add("R12", "episode rows complete", False, "not built", "run `hftf data build-features`")
     else:
         f = features[~features["dq_partial_day"].astype(bool)]
         cov = f[th["efnn_input_columns"]].notna().mean()
@@ -186,13 +194,40 @@ def evaluate(report: dict, th: dict, features: pd.DataFrame | None = None) -> li
             detail += f"; missing securities: {', '.join(uncovered)}"
         add(
             "R11",
-            "features_1m_v2 built and covering eFNN inputs",
+            "feature table built and covering eFNN inputs",
             ok,
             f"min coverage {cov.min():.3f}",
             f">= {th['min_feature_coverage']} for all equities",
             detail,
         )
+        add_episode_check(features, th, add)
     return checks
+
+
+def add_episode_check(features: pd.DataFrame, th: dict, add) -> None:
+    """R12: no NaN in any column an episode observes, on every train/val/test row from the first decision."""
+    cols = th["episode_columns"]
+    absent = [c for c in ["split", "mso", *cols] if c not in features.columns]
+    if absent:
+        add(
+            "R12", "episode rows complete", False, f"missing columns: {', '.join(absent)}", "rebuild features"
+        )
+        return
+    rows = features[(features["split"] != "excluded") & (features["mso"] >= th["first_decision_mso"])]
+    nan = rows[cols].isna().sum()
+    splits = sorted(rows["split"].unique())
+    bad = ", ".join(f"{c}={n}" for c, n in nan.items() if n)
+    missing_splits = sorted({"train", "val", "test"} - set(splits))
+    if missing_splits:
+        bad = "; ".join(x for x in (bad, f"empty splits: {', '.join(missing_splits)}") if x)
+    add(
+        "R12",
+        "episode rows complete",
+        not bad,
+        f"{len(rows):,} rows, {int(nan.sum())} NaN",
+        "0 NaN; train/val/test non-empty",
+        bad,
+    )
 
 
 def summary(checks: list[Check]) -> dict:

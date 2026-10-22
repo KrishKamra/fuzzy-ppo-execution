@@ -1,27 +1,23 @@
-# Data-readiness thresholds (docs/DATA_READINESS.md). `hftf data audit --tier <tier>` checks against these.
-#   pilot    - enough to build and debug the full pipeline (M1-M3)
-#   research - minimum for reportable out-of-sample results (M4)
-tiers:
-  pilot:
-    min_intraday_equities: 3
-    min_bar_sessions: 60          # per equity, TRADE/BID/ASK
-    max_missing_bar_sessions: 1   # trading sessions (per NIFTY daily) absent inside the bar window
-    min_full_tick_days: 15        # per tick-covered equity
-    min_tick_equities: 3          # equities that must meet min_full_tick_days
-    min_daily_sessions: 250       # per equity, for ADV / daily-vol features
-  research:
-    min_intraday_equities: 50
-    min_bar_sessions: 90          # ~ one full Bloomberg intraday window; more requires accumulating pulls
-    max_missing_bar_sessions: 0
-    min_full_tick_days: 40        # ~2 Bloomberg tick windows: needs >= 2 pulls ~4 weeks apart
-    min_tick_equities: 10         # collector TICK_UNIVERSE_N default
-    min_daily_sessions: 250
-# Integrity checks: identical for every tier
+# Data-readiness gate (docs/DATA_READINESS.md). `hftf data audit --strict` checks the frozen pull and the
+# final feature table against these thresholds.
+coverage:
+  min_intraday_equities: 3
+  min_bar_sessions: 90                           # per equity, TRADE/BID/ASK
+  max_missing_bar_sessions: 0                    # trading sessions (per NIFTY daily) absent inside the bar window
+  acknowledged_missing_sessions: ["2026-09-10"]  # collection gap; the session is dropped whole, never imputed
+  min_full_tick_days: 20                         # per tick-covered equity
+  min_tick_equities: 3                           # equities that must meet min_full_tick_days
+  min_daily_sessions: 250                        # per equity, for ADV / daily-vol features
 integrity:
   full_tick_day_last_tick_ist: "15:20:00"   # a tick day is "full" if ticks reach this time
   max_volume_recon_error: 0.001             # |clean tick volume / bar volume - 1| on full tick days
   max_crossed_quotes: 0                     # after clean_quotes
   min_imbalance_proxy_pearson: 0.70         # bar proxy vs tick L1 imbalance
   context_instruments: ["NIFTY Index", "NSEBANK Index", "INVIXN Index"]
-  min_feature_coverage: 0.95                # non-null share of eFNN inputs in features_1m_v2 (full days)
+  min_feature_coverage: 0.95                # non-null share of eFNN inputs in the feature table (full days)
   efnn_input_columns: [imb_bar_proxy, spread_var_30m, rv_30m]
+  # R12: every row an episode can observe (train/val/test, from the first decision at 09:20) is complete
+  first_decision_mso: 4                     # row 09:19 is observable at the 09:20 decision
+  episode_columns: [imb_bar_proxy_ema5, log_spread_var_30m, log_rv_30m, rv_30m, spread_bps, mid, px,
+                    dev_vwap_bps, ret_5m, prof_share, prof_cum_share, prof_avg_vol, ctx_nifty_ret_30m,
+                    ctx_vix, d_adv_20d, d_vol_20d]

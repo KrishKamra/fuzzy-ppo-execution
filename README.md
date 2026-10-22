@@ -7,8 +7,9 @@ The agent learns how to slice a parent order (a pace relative to a VWAP schedule
 implementation shortfall: spread, market impact, timing risk and NSE transaction costs. The actor-critic
 losses, including the Bellman value loss, also train the fuzzy membership functions.
 
-> **Status:** M0 is complete (workspace, data audit, corrected feature table). Next is M1, the execution
-> simulator and classical baselines. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#9-milestones).
+> **Status:** M0 is complete (workspace, data audit, final feature table `features_1m_v3`, readiness gate
+> `final` READY). Next is M1, the execution simulator and classical baselines.
+> See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#9-milestones).
 
 ## Quick start
 
@@ -18,14 +19,14 @@ a CPU build.
 ```bash
 uv sync                              # create .venv and install all workspace packages + dev tools
 uv run pytest                        # tests
-uv run hftf data audit               # validate raw pull + readiness check (--tier pilot|research, --strict)
-uv run hftf data build-features      # corrected 1-min feature table   -> data/processed/features_1m_v2.parquet
+uv run hftf data build-features      # final 1-min feature table -> data/processed/features_1m_v3.parquet (+ manifest)
+uv run hftf data audit --strict      # readiness gate R01-R12 (raw pull + feature table)
 ```
 
 The raw data is expected at `data/is2/bbg_data/`. Override that with `HFTF_RAW_DIR`. It is licensed
-Bloomberg data and is git-ignored. To produce or extend it, run `Bloomberg_training_pull.ipynb` on a
-Bloomberg Terminal machine (`MODE = "plan"` previews the gaps anywhere; `MODE = "pull"` fetches them). It is
-incremental, so re-run it weekly. See [docs/DATA_READINESS.md](docs/DATA_READINESS.md).
+Bloomberg data and is git-ignored. **The dataset is frozen:** no further Bloomberg pulls are planned, and gaps
+are handled in `hftf_data.features` (logged in [docs/DATA_TRANSFORMS.md](docs/DATA_TRANSFORMS.md)). Build the features before
+the audit, because check R12 reads the table.
 
 ## Repository layout (uv workspace monorepo)
 
@@ -45,7 +46,8 @@ incremental, so re-run it weekly. See [docs/DATA_READINESS.md](docs/DATA_READINE
 - **[project_context.md](project_context.md)**: domain knowledge, data dictionary, invariants. Start here.
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: the binding design and decision log.
 - **[docs/DATA_AUDIT.md](docs/DATA_AUDIT.md)**: what the Bloomberg pull contains, its defects, and how each was fixed.
-- **[docs/DATA_READINESS.md](docs/DATA_READINESS.md)**: pass/fail definition of "data ready" and the steps to get there.
+- **[docs/DATA_READINESS.md](docs/DATA_READINESS.md)**: the pass/fail definition of "data ready".
+- **[docs/DATA_TRANSFORMS.md](docs/DATA_TRANSFORMS.md)**: every cleaning, imputation and transformation step (T1-T22).
 - [docs/prompts/project_context_prompt.md](docs/prompts/project_context_prompt.md): regenerates `project_context.md`.
 
 ## Data at a glance
@@ -54,8 +56,10 @@ There are 3 Nifty-50 stocks (Adani Enterprises, Adani Ports, Apollo Hospitals), 
 1-minute TRADE/BID/ASK bars (Jun-Oct 2026), 20 sessions of ~1 s conflated L1 ticks, index and futures
 context, and 15 years of daily history. The audit found and fixed inflated tick volumes (2-76×),
 transiently crossed quotes, and missing tick/lot sizes. It also rebuilt L1 imbalance for the days without
-ticks using a bar-level proxy (ρ ≈ 0.77-0.86 against ticks). This pull is a pilot. The research-tier
-pull (≥50 stocks) is `Bloomberg_training_pull.ipynb`.
+ticks using a bar-level proxy (ρ ≈ 0.77-0.86 against ticks). From 2026-08-03 NSE runs a closing call
+auction (15:15-15:30) in this data, so every session is cut to 09:15-15:15. The final table has 92 usable
+sessions per stock (train 60, val 20, test 12). 2026-09-10 is missing from the pull and is dropped whole,
+not imputed.
 
 ## License
 

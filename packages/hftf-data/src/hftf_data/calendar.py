@@ -2,8 +2,14 @@
 
 All raw timestamps are UTC. NSE cash market (IST, UTC+05:30):
   pre-open order entry 09:00-09:08, order matching 09:08-09:12, buffer to 09:15
-  continuous trading    09:15-15:30
+  continuous trading    09:15-15:30 (until 2026-07-31)
+  continuous trading    09:15-15:15, then a closing call auction to ~15:30 (from 2026-08-03)
   closing session       15:40-16:00 (trades at closing price)
+
+The closing auction is measured in our pull, not taken from a circular: from 2026-08-03 every equity has
+at most 2 bars in 15:15-15:30, its ticks there are indicative 'T' prints with zero-price quotes, and an
+'AUC' uncross prints at ~15:29:40. The feature grid therefore stops at 15:15 on every day, so the
+tradable session is the same 360 minutes before and after the change.
 """
 
 from __future__ import annotations
@@ -15,8 +21,10 @@ import pandas as pd
 IST = "Asia/Kolkata"
 PREOPEN_START = dt.time(9, 0)
 CONT_START = dt.time(9, 15)
-CONT_END = dt.time(15, 30)  # exclusive
-SESSION_MINUTES = 375
+CONT_END = dt.time(15, 30)  # exclusive; raw continuous-session mask (tick reconciliation)
+GRID_END = dt.time(15, 15)  # exclusive; end of the tradable feature grid on every day
+SESSION_MINUTES = 360
+CLOSING_AUCTION_FROM = dt.date(2026, 8, 3)
 OPEN_MINUTE_OF_DAY = 9 * 60 + 15
 
 # Weekdays inside the bar window with no NSE session (confirmed against daily index data).
@@ -41,7 +49,7 @@ def continuous_mask(ts_utc: pd.Series) -> pd.Series:
 
 
 def session_grid(days: list[str] | list[dt.date]) -> pd.DatetimeIndex:
-    """1-minute bar-start grid (UTC) covering the continuous session of each day."""
+    """1-minute bar-start grid (UTC) covering 09:15-15:15 IST (GRID_END) of each day."""
     parts = [
         pd.date_range(
             pd.Timestamp(f"{d} 09:15", tz=IST).tz_convert("UTC"), periods=SESSION_MINUTES, freq="min"

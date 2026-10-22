@@ -6,7 +6,6 @@ interpretation lives in docs/DATA_AUDIT.md.
 
 from __future__ import annotations
 
-import json
 from collections import Counter
 
 import numpy as np
@@ -145,20 +144,6 @@ def daily_field_coverage(paths: DataPaths) -> dict:
     return out
 
 
-def collector_errors(paths: DataPaths) -> dict:
-    p = paths.raw / "reports" / "errors.jsonl"
-    if not p.exists():
-        return {}
-    recs = [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
-    by_kind = Counter(r.get("kind") for r in recs)
-    by_field = Counter((r.get("kind"), r.get("field")) for r in recs if r.get("field"))
-    return {
-        "total": len(recs),
-        "by_kind": dict(by_kind),
-        "top_fields": [{"kind": k, "field": f, "count": c} for (k, f), c in by_field.most_common(25)],
-    }
-
-
 def run_audit(paths: DataPaths | None = None) -> dict:
     paths = paths or DataPaths()
     static_eq = load_static("equity", paths)
@@ -172,7 +157,6 @@ def run_audit(paths: DataPaths | None = None) -> dict:
         "imbalance_proxy": imbalance_proxy_check(paths),
         "tick_size": tick_size_check(paths),
         "daily": daily_field_coverage(paths),
-        "collector_errors": collector_errors(paths),
         "tick_window": {
             sec: [tick_days(sec, paths)[0], tick_days(sec, paths)[-1]]
             for sec in list_securities("ticks", paths=paths)

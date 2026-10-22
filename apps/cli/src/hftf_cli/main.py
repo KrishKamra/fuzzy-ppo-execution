@@ -17,24 +17,22 @@ console = Console()
 
 @data_app.command("audit")
 def audit(
-    tier: str = typer.Option(
-        "research", help="Readiness tier from configs/data_readiness.yaml: pilot | research"
-    ),
     strict: bool = typer.Option(False, help="Exit with code 1 if any readiness check fails."),
 ) -> None:
-    """Validate the raw Bloomberg pull, check readiness, and write docs/data/data_audit.json."""
+    """Validate the raw pull and the final feature table (R01-R12); write docs/data/data_audit.json."""
     import pandas as pd
     from rich.table import Table
 
+    from hftf_data.features import FEATURES_FILE
     from hftf_data.readiness import evaluate, load_thresholds, summary
     from hftf_data.validate import run_audit
 
     paths = DataPaths()
     report = run_audit(paths)
-    feat_path = paths.processed / "features_1m_v2.parquet"
+    feat_path = paths.processed / FEATURES_FILE
     features = pd.read_parquet(feat_path) if feat_path.exists() else None
-    checks = evaluate(report, load_thresholds(tier), features)
-    report["readiness"] = {"tier": tier, **summary(checks)}
+    checks = evaluate(report, load_thresholds(), features)
+    report["readiness"] = summary(checks)
     paths.reports.mkdir(parents=True, exist_ok=True)
     out = paths.reports / "data_audit.json"
     out.write_text(json.dumps(report, indent=2, default=str))
@@ -51,7 +49,7 @@ def audit(
         rule = r["nse_rule_tick_at_median_px"]
         console.print(f"tick size {r['security']}: inferred={r['inferred_tick']} nse_rule={rule}")
 
-    table = Table(title=f"Data readiness - tier: {tier}")
+    table = Table(title="Data readiness")
     for col in ("id", "check", "result", "measured", "required", "detail"):
         table.add_column(col, overflow="fold")
     for c in checks:
@@ -69,16 +67,24 @@ def audit(
 
 @data_app.command("build-features")
 def build_features() -> None:
-    """Build the causal 1-minute feature table v2 into data/processed/features_1m_v2.parquet."""
-    from hftf_data.features import build_feature_table
+    """Build the final causal 1-minute feature table (v3) and its manifest into data/processed/."""
+    from hftf_data.features import FEATURES_FILE, build_feature_table, manifest
+    from hftf_data.readiness import load_thresholds
 
     paths = DataPaths()
     df = build_feature_table(paths=paths)
     paths.processed.mkdir(parents=True, exist_ok=True)
-    out = paths.processed / "features_1m_v2.parquet"
+    out = paths.processed / FEATURES_FILE
     df.to_parquet(out, index=False)
+    th = load_thresholds()
+    m = manifest(df, paths, th["episode_columns"], th["first_decision_mso"])
+    out.with_suffix(".manifest.json").write_text(json.dumps(m, indent=2, default=str))
     console.print(f"[bold]{out}[/bold]: {len(df):,} rows x {df.shape[1]} cols")
-    console.print(df.groupby("security")["l1_imb_source"].value_counts(normalize=True).round(3).to_string())
+    console.print(f"sessions by split: {m['sessions_by_split']}")
+    console.print(f"dropped (incomplete) sessions: {m['dropped_sessions']}")
+    console.print(
+        f"episode rows: {m['episode_rows']:,}; NaN in episode columns: {sum(m['episode_nan'].values())}"
+    )
 
 
 if __name__ == "__main__":

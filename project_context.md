@@ -217,7 +217,9 @@ with `t0 ∈ [09:20, 15:15−H]`. Decision step Δ = 1 min. The residual is forc
 - Private: remaining inventory fraction, remaining time fraction, IS so far (bps), last action, schedule deviation.
 - Market: `spread_bps`, `dev_vwap_bps`, side-signed `ret_5m`, expected next-5-min profile share,
   side-signed `ctx_nifty_ret_30m`, `ctx_vix`.
-- All features are standardised with **train-split statistics only**.
+- All features are standardised with **train-split statistics only**. The policy never sees `side`, so every
+  directional column (imbalance, `dev_vwap_bps`, `ret_5m`, `ctx_nifty_ret_30m`) is multiplied by it and
+  scaled without centring (ARCHITECTURE §4.2).
 
 ### 6.3 Action and reward
 - Action `a ∈ [0, 4]` from a scaled Beta distribution. Child
@@ -225,7 +227,8 @@ with `t0 ∈ [09:20, 15:15−H]`. Decision step Δ = 1 min. The residual is forc
   The Beta is chosen because it is bounded, so no clipping bias arises as with Gaussians. The
   multiplicative form keeps the meaning of `a` the same for any `Q` and `H`.
 - Reward per step (bps of arrival notional):
-  `r_t = −side·(p_exec − m_0)/m_0·(q_t/Q)·1e4 − fees_t − λ·(σ_t·1e4)²·(X_t/Q)²·Δ`.
+  `r_t = −side·(p_exec − m_0)/m_0·(q_t/Q)·1e4 − fees_t − λ·(σ_t·1e4)²·(X_{t+1}/Q)²·Δ`, with `X_{t+1}` the
+  inventory left after the child (discrete Almgren-Chriss variance).
   The sum over the episode is `−(IS + fees + λ·risk)`, the AC objective. The discount is `γ = 1` because
   episodes are finite and cost is additive.
 
@@ -376,8 +379,8 @@ available on every bar day.
 | Milestone | Status |
 |---|---|
 | M0: uv workspace, data audit, final `features_1m_v3`, tests | **done** |
-| M1: `hftf-sim` (BatchEnv, ImpactModel, FeeModel, EpisodeSampler) + TWAP/VWAP/AC | next |
-| M2: PPO-MLP | planned |
+| M1: `hftf-sim` (BatchEnv, ImpactModel, FeeModel, EpisodeSampler) + TWAP/VWAP/POV/AC baselines | **done** |
+| M2: PPO-MLP | next |
 | M3: static fuzzy → evolving fuzzy | planned |
 | M4: experiments, ablations, robustness, report | planned |
 | M5: full-universe data, TickSim, limit orders | planned |

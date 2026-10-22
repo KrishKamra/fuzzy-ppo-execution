@@ -12,6 +12,8 @@ from hftf_data.paths import DataPaths
 app = typer.Typer(no_args_is_help=True, help="Regime-aware execution (Fuzzy PPO) toolkit.")
 data_app = typer.Typer(no_args_is_help=True, help="Data validation and feature building.")
 app.add_typer(data_app, name="data")
+eval_app = typer.Typer(no_args_is_help=True, help="Backtests of baselines and policies in the simulator.")
+app.add_typer(eval_app, name="eval")
 console = Console()
 
 
@@ -85,6 +87,38 @@ def build_features() -> None:
     console.print(
         f"episode rows: {m['episode_rows']:,}; NaN in episode columns: {sum(m['episode_nan'].values())}"
     )
+
+
+@eval_app.command("baselines")
+def eval_baselines(
+    split: str = typer.Option("val", help="train | val | test"),
+    episodes: int = typer.Option(4000, help="Parent orders, shared by every baseline (paired)."),
+    seed: int = typer.Option(0, help="Episode seed."),
+    randomise_impact: bool = typer.Option(False, help="Draw impact per episode from the training ranges."),
+) -> None:
+    """Immediate, TWAP, VWAP, POV10 and Almgren-Chriss on identical episodes (costs in bps of arrival)."""
+    import pandas as pd
+    from rich.table import Table
+
+    from hftf_eval.backtest import run_policy, sample_episodes
+    from hftf_eval.baselines import default_baselines
+    from hftf_eval.metrics import summarize
+    from hftf_sim import EnvConfig, MarketData
+
+    cfg = EnvConfig.load()
+    market = MarketData.load(cfg.features_path)
+    ep = sample_episodes(market, cfg, split, episodes, seed)
+    rows = [run_policy(p, market, cfg, ep, randomise_impact=randomise_impact) for p in default_baselines()]
+    table_df = summarize(pd.concat(rows, ignore_index=True))
+    table = Table(title=f"Baselines on {split}: {episodes:,} episodes, seed {seed}")
+    heads = ("n", "IS", "IS med", "IS sd", "CVaR95", "fees", "obj", "vs VWAP", "kids")
+    table.add_column("policy")
+    for h in heads:
+        table.add_column(h, justify="right")
+    for name, r in table_df.iterrows():
+        table.add_row(name, *(f"{v:,.0f}" if c == "episodes" else f"{v:.1f}" for c, v in r.items()))
+    console.print(table)
+    console.print("bps of arrival notional; obj = IS + fees + risk; vs VWAP = slippage to market VWAP")
 
 
 if __name__ == "__main__":

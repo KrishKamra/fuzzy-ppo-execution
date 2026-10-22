@@ -7,8 +7,9 @@ The agent learns how to slice a parent order (a pace relative to a VWAP schedule
 implementation shortfall: spread, market impact, timing risk and NSE transaction costs. The actor-critic
 losses, including the Bellman value loss, also train the fuzzy membership functions.
 
-> **Status:** M0 is complete (workspace, data audit, final feature table `features_1m_v3`, readiness gate
-> `final` READY). Next is M1, the execution simulator and classical baselines.
+> **Status:** M0 (workspace, data audit, final feature table `features_1m_v3`, readiness gate READY 12/12)
+> and M1 (batched execution simulator `hftf-sim`; immediate/TWAP/VWAP/POV/Almgren-Chriss baselines in
+> `hftf-eval`) are complete. Next is M2, PPO-MLP.
 > See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#9-milestones).
 
 ## Quick start
@@ -21,6 +22,7 @@ uv sync                              # create .venv and install all workspace pa
 uv run pytest                        # tests
 uv run hftf data build-features      # final 1-min feature table -> data/processed/features_1m_v3.parquet (+ manifest)
 uv run hftf data audit --strict      # readiness gate R01-R12 (raw pull + feature table)
+uv run hftf eval baselines --split val   # TWAP/VWAP/POV/AC/immediate in the simulator (paired episodes)
 ```
 
 The raw data is expected at `data/is2/bbg_data/`. Override that with `HFTF_RAW_DIR`. It is licensed

@@ -80,8 +80,13 @@ flowchart LR
   Optional extension (config): `rel_volume`, `ofi_norm_5m` (tick days only).
 - **Private `z_p`:** remaining inventory fraction, remaining time fraction, IS so far (bps), last pace
   action, schedule deviation (executed − VWAP-schedule fraction).
-- **Market `z_m`:** `spread_bps`, `dev_vwap_bps`, `ret_5m` (signed by side), expected share of the remaining
-  volume in the next 5 min (from the profile), `ctx_nifty_ret_30m` (signed), `ctx_vix`.
+- **Market `z_m`:** `spread_bps`, `dev_vwap_bps` (signed), `ret_5m` (signed by side), expected share of the
+  remaining volume in the next 5 min (from the profile), `ctx_nifty_ret_30m` (signed), `ctx_vix`.
+- **Side symmetry (built):** the policy never sees `side`, so every directional column is multiplied by it:
+  `imb_bar_proxy_ema5` (so the eFNN sees "imbalance with/against us"), `dev_vwap_bps`, `ret_5m`,
+  `ctx_nifty_ret_30m`. Signed columns are scaled by the train std but **not centred**, so the sign flip is an
+  exact mirror; the others are z-scored. Stats come from train rows from the 09:20 decision (as in the
+  manifest), and z-scores are clipped to ±5. Layout: `hftf_sim.obs_names()` = x (3) · z_p (5) · z_m (6).
 
 ### 4.3 Action: pace multiplier
 `a_t ∈ [0, a_max]` (`a_max = 4`), sampled from a **Beta** distribution scaled to that range.
@@ -98,11 +103,18 @@ Children execute at minute `t+1` as aggressive orders:
 p_exec = m̃_{t+1} + side · ( s_{t+1}/2  +  η · σ_{t+1} · (q_t / V_{t+1})^β )      temporary
 m̃_t   = m_t + side · Σ_{u<t} γ · σ_u · (q_u / V_u)^β · exp(−(t−u)/τ_res)          transient (OW-style)
 ```
-- `m`, `s`, `V` are the historical mid, spread and realised minute volume. `σ` is the 1-min vol from `rv_30m`.
-- Children with `q ≤` L1 depth (tick days) pay half the spread only.
+- `m`, `s`, `V` are the historical mid, spread and realised minute volume. `σ` is the 1-min vol from `rv_30m`
+  (`rv_30m/√30`). As built, impact terms are fractions of the mid: `p = m·(1 + side·(D + s/2 + η·σ·(q/V)^β))`
+  with `D` the decayed transient displacement (`hftf_sim/impact.py`).
+- `V_eff = max(V, 1% of expected volume, 1 share)` guards (near-)empty minutes (1 zero-volume usable minute).
+- Children are whole shares. The last step force-executes the residual and ignores the participation cap.
+- *Deferred to TickSim (M5):* children with `q ≤` L1 depth paying half the spread only. BarSim always adds
+  the temporary impact term.
 - Defaults: `β = 0.5` (square-root law), `η = 0.5`, `γ = 0.3`, `τ_res = 5 min`. **Domain randomisation**
   draws `η ∈ [0.25, 1.0]`, `γ ∈ [0.1, 0.5]` and `τ_res ∈ [2, 15]` per episode, because our own impact cannot
   be identified from public data. Robustness to these parameters is a reported result, not a hidden assumption.
+  Draws come from each episode's own seed, so paired policies face identical impact. Evaluation defaults to
+  the fixed defaults (`hftf eval baselines --randomise-impact` to draw).
 - Counterfactual caveat: historical prices are not affected by our past trades except through `m̃`.
 
 ### 4.5 Costs (`configs/fees_nse.yaml`, configurable, verify against current circulars)
@@ -114,15 +126,22 @@ over-slicing**, so the slice count becomes a real trade-off.
 
 ### 4.6 Reward (bps of arrival notional, per step)
 ```
-r_t = − side · (p_exec,t − m_0)/m_0 · (q_t/Q) · 1e4   − fees_t(bps)   − λ · (σ_t·1e4)² · (X_t/Q)² · Δ
+r_t = − side · (p_exec,t − m_0)/m_0 · (q_t/Q) · 1e4   − fees_t(bps)   − λ · (σ_t·1e4)² · (X_{t+1}/Q)² · Δ
 ```
+`m_0` is the mid of the row observed at `t0`. The risk term uses the inventory **left after** the child
+(`X_{t+1}`), as in discrete Almgren-Chriss (`Var = σ²Σ x_k²`, `k ≥ 1`), so immediate execution carries no
+timing risk.
 Summed over an episode, this gives `−(IS + fees + λ·risk)`, the Almgren-Chriss objective. Defaults are
 `λ = 1e-4` (swept), and running-std reward scaling is applied in the trainer.
 
 ### 4.7 Implementation
 A pure-numpy **batched env** (`BatchExecutionEnv`, N episodes stepped together) with a thin
 `gymnasium.Env` wrapper for compatibility. There is no GPU, so environment throughput dominates
-training time. Market arrays are pre-sliced per episode at reset.
+training time. Market arrays are held per session as `(n_sessions, 360)` arrays (`MarketData`) and
+indexed per step by `(session, row0 + k)`, which is equivalent to pre-slicing and cheaper. `autoreset=True`
+(training) re-samples finished envs; `autoreset=False` (evaluation) runs a fixed batch. Throughput: about
+4,000 episodes per baseline in 0.2 s. Baselines (`hftf-eval`) act in shares through `step_shares` and are
+not participation-capped, except VWAP, which is the pace action `a = 1`.
 
 ## 5. Evolving fuzzy layer (`hftf-fuzzy`)
 
@@ -221,7 +240,7 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 | | Deliverable | Exit criterion |
 |---|---|---|
 | **M0** ✅ | uv workspace, data audit, final features v3 | `hftf data audit --strict` passes (12/12); tests green |
-| **M1** | `hftf-sim` + TWAP/VWAP/AC baselines | share conservation and causality tests; TWAP IS ≈ analytic AC cost under the linear-impact config |
+| **M1** ✅ | `hftf-sim` + TWAP/VWAP/AC baselines | share conservation and causality tests; TWAP IS ≈ analytic AC cost under the linear-impact config |
 | **M2** | PPO-MLP | beats VWAP on train; val gap reported |
 | **M3** | static fuzzy → evolving fuzzy | rule add/merge/prune logged; no PPO instability at edits (KL spikes < target) |
 | **M4** | experiments, ablations, robustness, report | paired stats tables, regime breakdowns, rule narratives |
@@ -251,3 +270,5 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 | 2026-10-22 | **Supersedes the row above.** The pull is frozen and the pull notebook is retired (it stays in git history at `de800d8`). The gate is the new `final` readiness tier | university scope; the full pull ran for 20+ min and returned far more data than needed; the research tier's 50 names and 40 tick days cannot be produced by processing |
 | 2026-10-22 | Final dataset `features_1m_v3`: a 09:15-15:15 grid on every day; incomplete sessions dropped whole (Sep 10); flagged within-session last-observation fills; partial-window warm-up estimators; a `split` column | closing call auction from 2026-08-03 (DATA_AUDIT F10); imputing a whole session would fabricate data; R12 makes every episode row complete so the env never imputes |
 | 2026-10-22 | One readiness gate (no tiers); the collector tooling leaves the repo (git history `de800d8`); every transformation is logged in `docs/DATA_TRANSFORMS.md` | the pull is frozen, so pilot/research tiers and pull tooling have no remaining use; the audit stays because R06-R12 guard the cleaning and feature code |
+| 2026-10-23 | M1 simulator as built: every directional observation (incl. the imbalance regime input) is side-signed and scaled without centring; the risk term uses post-child inventory `X_{t+1}`; impact in mid fractions with `V_eff ≥ 1%` of expected volume; whole-share children; forced residual ignores the cap | the policy never sees `side`, so unsigned directional inputs would make buys and sells indistinguishable; post-trade inventory is the discrete AC variance, which makes TWAP match the analytic AC cost exactly (test); the floor stops a zero-volume minute from giving infinite impact |
+| 2026-10-23 | Domain-randomised impact is drawn from each episode's seed; evaluation uses fixed defaults unless `--randomise-impact`; L1-depth half-spread fills are deferred to TickSim | paired comparisons need identical impact per episode across policies; BarSim has no depth on 78% of days |

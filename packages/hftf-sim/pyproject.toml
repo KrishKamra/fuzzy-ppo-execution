@@ -6,6 +6,8 @@ dependencies = [
     "hftf-data",
     "numpy>=2.0",
     "gymnasium>=1.0",
+    "pydantic>=2.9",
+    "pyyaml>=6.0",
 ]
 
 [build-system]

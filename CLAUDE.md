@@ -8,6 +8,7 @@ Read `project_context.md` first (domain, data dictionary, invariants). The bindi
 - `uv run pytest`: tests | `uv run ruff check . && uv run ruff format --check .`: lint
 - `uv run hftf data build-features`: → `data/processed/features_1m_v3.parquet` (+ `.manifest.json`), the final dataset
 - `uv run hftf data audit [--strict]`: readiness gate R01-R12 over the raw pull and the feature table (`docs/DATA_READINESS.md`)
+- `uv run hftf eval baselines [--split val] [--randomise-impact]`: paired baseline backtest in `hftf-sim`
 - Every imputation/transformation is logged in `docs/DATA_TRANSFORMS.md`: update it with any change to `hftf_data`
 
 ## Rules

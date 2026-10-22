@@ -489,6 +489,8 @@ dependencies = [
     { name = "gymnasium" },
     { name = "hftf-data" },
     { name = "numpy" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
 ]
 
 [package.metadata]
@@ -496,6 +498,8 @@ requires-dist = [
     { name = "gymnasium", specifier = ">=1.0" },
     { name = "hftf-data", editable = "packages/hftf-data" },
     { name = "numpy", specifier = ">=2.0" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [[package]]

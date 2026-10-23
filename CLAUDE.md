@@ -9,6 +9,8 @@ Read `project_context.md` first (domain, data dictionary, invariants). The bindi
 - `uv run hftf data build-features`: → `data/processed/features_1m_v3.parquet` (+ `.manifest.json`), the final dataset
 - `uv run hftf data audit [--strict]`: readiness gate R01-R12 over the raw pull and the feature table (`docs/DATA_READINESS.md`)
 - `uv run hftf eval baselines [--split val] [--randomise-impact]`: paired baseline backtest in `hftf-sim`
+- `uv run hftf train ppo --run NAME [--seed N]` → `runs/NAME/`; `uv run hftf eval policy runs/NAME/best.pt --split val`
+- Results go in `docs/RESULTS.md` (fresh paired episodes, all seeds; never the selection set)
 - Every imputation/transformation is logged in `docs/DATA_TRANSFORMS.md`: update it with any change to `hftf_data`
 
 ## Rules

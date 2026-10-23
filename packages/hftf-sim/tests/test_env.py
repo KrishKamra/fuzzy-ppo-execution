@@ -112,3 +112,34 @@ def test_real_sessions_give_finite_observations():
             assert np.isfinite(obs).all()
             obs, reward, *_ = env.step(np.ones(512))
             assert np.isfinite(reward).all()
+
+
+def test_mark_to_market_reward_sums_to_arrival_is():
+    rewards = {}
+    for mode in ("arrival", "mark_to_market"):
+        cfg, mk = EnvConfig.load(), market()
+        cfg.reward.mode = mode
+        env = BatchExecutionEnv(mk, cfg, n_envs=8, autoreset=False, randomise_impact=False)
+        env.reset(episodes(8, horizon=60, qty=4000.0, row0=50))
+        rng, total = np.random.default_rng(6), np.zeros(8)
+        while not env.done.all():
+            total += env.step(rng.uniform(0, 3, size=8))[1]
+        np.testing.assert_allclose(total, -env.summary()["cost_bps"], rtol=1e-9, atol=1e-9)
+        rewards[mode] = total
+    np.testing.assert_allclose(rewards["arrival"], rewards["mark_to_market"], rtol=1e-9, atol=1e-9)
+
+
+def test_vs_vwap_reward_is_cost_relative_to_a_separate_vwap_run():
+    cfg, mk = EnvConfig.load(), market()
+    ep = episodes(8, horizon=60, qty=4000.0, row0=50)
+    costs = {}
+    for name, act in (("vwap", lambda rng: np.ones(8)), ("agent", lambda rng: rng.uniform(0, 3, size=8))):
+        cfg.reward.mode = "vs_vwap"
+        env = BatchExecutionEnv(mk, cfg, n_envs=8, autoreset=False, randomise_impact=True)
+        env.reset(ep)
+        rng, total = np.random.default_rng(7), np.zeros(8)
+        while not env.done.all():
+            total += env.step(act(rng))[1]
+        costs[name] = (env.summary()["cost_bps"], total)
+    np.testing.assert_allclose(costs["vwap"][1], 0.0, atol=1e-9)  # VWAP against itself
+    np.testing.assert_allclose(costs["agent"][1], costs["vwap"][0] - costs["agent"][0], rtol=1e-9, atol=1e-9)

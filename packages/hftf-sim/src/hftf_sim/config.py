@@ -38,6 +38,10 @@ class ImpactConfig(BaseModel):
 
 class RewardConfig(BaseModel):
     risk_aversion: float = 1.0e-4
+    # arrival: (p − m0) per child. mark_to_market: the same IS split into each step's execution cost and
+    # inventory P&L (same episode return). vs_vwap: mark_to_market minus a shadow adaptive VWAP on the same
+    # path (return shifted by an action-independent amount). See ARCHITECTURE §4.6.
+    mode: Literal["arrival", "mark_to_market", "vs_vwap"] = "vs_vwap"
 
 
 class EnvConfig(BaseModel):

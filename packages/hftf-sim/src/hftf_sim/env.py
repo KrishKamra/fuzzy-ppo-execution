@@ -20,7 +20,12 @@ from hftf_sim.fees import FeeModel
 from hftf_sim.impact import ImpactModel
 from hftf_sim.market import REGIME_COLUMNS, MarketData
 
-PRIVATE_COLUMNS = ("inventory_frac", "time_frac", "is_bps", "last_action", "schedule_dev")
+# log_participation = log(Q / expected horizon volume) and minutes_left / max H tell the policy the order size
+# and horizon, which set the impact vs per-child-fee trade-off (ARCHITECTURE §4.2).
+PRIVATE_COLUMNS = (
+    "inventory_frac", "time_frac", "is_bps", "last_action", "schedule_dev",
+    "log_participation", "minutes_left",
+)  # fmt: skip
 NEXT_SHARE_MIN = 5
 EPS = 1e-12
 
@@ -61,12 +66,14 @@ class BatchExecutionEnv:
         self.a_max = cfg.action.a_max
         self.cap = cfg.action.participation_cap
         self.risk_aversion = cfg.reward.risk_aversion
+        self.reward_mode = cfg.reward.mode
         self.impact = ImpactModel(cfg.impact, n_envs)
         self.names = obs_names(market)
         self.signed = np.concatenate(
             [market.signed_mask[: REGIME_SLICE.stop], np.zeros(len(PRIVATE_COLUMNS), bool),
              market.signed_mask[REGIME_SLICE.stop :], [False]]
         )  # fmt: skip
+        self.max_horizon = max(cfg.episode.horizons_min)
         self.ep: Episodes | None = None
 
     @property
@@ -85,8 +92,11 @@ class BatchExecutionEnv:
         self.k = np.zeros(self.n, dtype=np.int64)
         self.remaining = episodes.qty.astype(np.float64).copy()
         self.disp = np.zeros(self.n)
+        self.shadow_left = self.remaining.copy()  # shadow VWAP (reward mode vs_vwap)
+        self.shadow_disp = np.zeros(self.n)
         self.last_action = np.ones(self.n)  # a = 1 is the adaptive-VWAP prior
         self.m0 = self.market.mid[episodes.session, episodes.row0]
+        self.m_prev = self.m0.copy()  # historical mid at the previous fill (mark-to-market reward)
         self.done = np.zeros(self.n, dtype=bool)
         self.totals = {f: np.zeros(self.n) for f in ("is_bps", "fees_bps", "risk_bps", "n_children", "cash")}
         self.mkt_value = np.zeros(self.n)
@@ -101,8 +111,11 @@ class BatchExecutionEnv:
         self.k[idx] = 0
         self.remaining[idx] = new.qty
         self.disp[idx] = 0.0
+        self.shadow_left[idx] = new.qty
+        self.shadow_disp[idx] = 0.0
         self.last_action[idx] = 1.0
         self.m0[idx] = self.market.mid[new.session, new.row0]
+        self.m_prev[idx] = self.m0[idx]
         self.done[idx] = False
         for v in (*self.totals.values(), self.mkt_value, self.mkt_volume):
             v[idx] = 0.0
@@ -121,12 +134,12 @@ class BatchExecutionEnv:
         total = cp[s, end] - cp[s, self.ep.row0 + 1]
         return w, np.maximum(rest, EPS), np.maximum(total, EPS)
 
-    def pace_to_shares(self, action: np.ndarray) -> np.ndarray:
+    def pace_to_shares(self, action: np.ndarray, remaining: np.ndarray | None = None) -> np.ndarray:
         """`q = clip(a · X · w_k / Σ_{s≥k} w_s, 0, min(X, cap · V̂_k))` (ARCHITECTURE §4.3)."""
         a = np.clip(np.asarray(action, dtype=np.float64).reshape(self.n), 0.0, self.a_max)
+        x = self.remaining if remaining is None else remaining
         w, rest, _ = self._profile()
-        q = a * self.remaining * w / rest
-        return np.minimum(q, np.minimum(self.remaining, self.cap * w))
+        return np.minimum(a * x * w / rest, np.minimum(x, self.cap * w))
 
     def implied_pace(self, q: np.ndarray) -> np.ndarray:
         w, rest, _ = self._profile()
@@ -144,28 +157,62 @@ class BatchExecutionEnv:
         q = np.clip(np.asarray(q, dtype=np.float64).reshape(self.n), 0.0, None)
         return self._execute(q, self.implied_pace(q))
 
+    def _children(self, q: np.ndarray, remaining: np.ndarray, live: np.ndarray) -> np.ndarray:
+        """Whole-share children; the last step force-executes the residual."""
+        forced = self.k == self.ep.horizon - 1
+        q = np.where(forced, remaining, np.minimum(np.rint(q), remaining))
+        return np.where(live, q, 0.0)
+
+    def _fill(self, q: np.ndarray, remaining: np.ndarray, disp: np.ndarray, live: np.ndarray):
+        """Fill price and step costs (bps of arrival notional) of children `q` taken from `remaining`, with
+        `disp` the already-decayed transient displacement. Returns (price, transient kick, costs)."""
+        ep, mk = self.ep, self.market
+        s, j = ep.session, self._fill_row()
+        m, sigma, volume = mk.mid[s, j], mk.sigma[s, j], mk.volume[s, j]
+        size = self.impact.scaled_size(q, volume, mk.prof[s, j])
+        temp = self.impact.temporary(sigma, size)
+        price = m * (1.0 + ep.side * (disp + mk.spread[s, j] / 2 + temp))
+        notional0 = ep.qty * self.m0
+        left = remaining - q
+        costs = {
+            "is_bps": ep.side * (price - self.m0) * q / notional0 * 1e4,
+            # Mark-to-market split of the same IS: child cost vs the current mid + inventory x mid change.
+            # Summed over an episode the two are equal (telescoping); this one assigns credit per step.
+            "mtm_bps": ep.side * (q * (price - m) + remaining * (m - self.m_prev)) / notional0 * 1e4,
+            "fees_bps": self.fees(q * price, ep.side, q > 0) / notional0 * 1e4,
+            "risk_bps": self.risk_aversion * (sigma * 1e4) ** 2 * (left / ep.qty) ** 2,
+        }
+        costs = {k: np.where(live, v, 0.0) for k, v in costs.items()}
+        kick = np.where(live, self.impact.transient_kick(sigma, size), 0.0)
+        return price, kick, costs
+
     def _execute(self, q: np.ndarray, pace: np.ndarray):
         ep, mk, live = self.ep, self.market, ~self.done
         s, j = ep.session, self._fill_row()
-        forced = self.k == ep.horizon - 1
-        q = np.where(forced, self.remaining, np.minimum(np.rint(q), self.remaining))
-        q = np.where(live, q, 0.0)
-
-        m, sigma, volume = mk.mid[s, j], mk.sigma[s, j], mk.volume[s, j]
-        size = self.impact.scaled_size(q, volume, mk.prof[s, j])
-        self.disp = np.where(self.k > 0, self.disp * self.impact.decay(), 0.0)
-        temp = self.impact.temporary(sigma, size)
-        price = m * (1.0 + ep.side * (self.disp + mk.spread[s, j] / 2 + temp))
-
-        notional0 = ep.qty * self.m0
-        is_bps = ep.side * (price - self.m0) * q / notional0 * 1e4
-        fees_bps = self.fees(q * price, ep.side, q > 0) / notional0 * 1e4
+        decay = self.impact.decay()
+        q = self._children(q, self.remaining, live)
+        self.disp = np.where(self.k > 0, self.disp * decay, 0.0)
+        price, kick, c = self._fill(q, self.remaining, self.disp, live)
+        is_bps, fees_bps, risk_bps = c["is_bps"], c["fees_bps"], c["risk_bps"]
+        cost = (c["mtm_bps"] if self.reward_mode != "arrival" else is_bps) + fees_bps + risk_bps
+        if self.reward_mode == "vs_vwap":
+            # Benchmark-relative reward: minus the same step of a shadow adaptive VWAP (a = 1) on the same
+            # path with its own impact. Its cost does not depend on our actions, so the optimal policy is
+            # unchanged, but the price-drift noise now scales with our deviation from VWAP.
+            qb = self._children(
+                self.pace_to_shares(np.ones(self.n), self.shadow_left), self.shadow_left, live
+            )
+            self.shadow_disp = np.where(self.k > 0, self.shadow_disp * decay, 0.0)
+            _, kick_b, cb = self._fill(qb, self.shadow_left, self.shadow_disp, live)
+            cost = cost - (cb["mtm_bps"] + cb["fees_bps"] + cb["risk_bps"])
+            self.shadow_left = self.shadow_left - qb
+            self.shadow_disp = self.shadow_disp + kick_b
+        reward = -cost
         self.remaining = self.remaining - q
-        risk_bps = self.risk_aversion * (sigma * 1e4) ** 2 * (self.remaining / ep.qty) ** 2
-        is_bps, fees_bps, risk_bps = (np.where(live, x, 0.0) for x in (is_bps, fees_bps, risk_bps))
-        reward = -(is_bps + fees_bps + risk_bps)
+        self.m_prev = np.where(live, mk.mid[s, j], self.m_prev)
+        self.disp = self.disp + kick
+        volume = mk.volume[s, j]
 
-        self.disp = self.disp + np.where(live, self.impact.transient_kick(sigma, size), 0.0)
         t = self.totals
         t["is_bps"] += is_bps
         t["fees_bps"] += fees_bps
@@ -207,6 +254,8 @@ class BatchExecutionEnv:
                 self.totals["is_bps"],
                 self.last_action,
                 (ep.qty - self.remaining) / ep.qty - sched,
+                np.log(ep.qty / total),
+                (ep.horizon - self.k) / self.max_horizon,
             ],
             axis=1,
         )

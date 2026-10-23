@@ -8,8 +8,9 @@ implementation shortfall: spread, market impact, timing risk and NSE transaction
 losses, including the Bellman value loss, also train the fuzzy membership functions.
 
 > **Status:** M0 (workspace, data audit, final feature table `features_1m_v3`, readiness gate READY 12/12)
-> and M1 (batched execution simulator `hftf-sim`; immediate/TWAP/VWAP/POV/Almgren-Chriss baselines in
-> `hftf-eval`) are complete. Next is M2, PPO-MLP.
+> M1 (batched execution simulator `hftf-sim`; immediate/TWAP/VWAP/POV/Almgren-Chriss baselines in
+> `hftf-eval`) and M2 (PPO-MLP, which beats VWAP by about 0.2 bps; [docs/RESULTS.md](docs/RESULTS.md)) are complete.
+> Next is M3, the evolving fuzzy layer.
 > See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#9-milestones).
 
 ## Quick start
@@ -23,6 +24,8 @@ uv run pytest                        # tests
 uv run hftf data build-features      # final 1-min feature table -> data/processed/features_1m_v3.parquet (+ manifest)
 uv run hftf data audit --strict      # readiness gate R01-R12 (raw pull + feature table)
 uv run hftf eval baselines --split val   # TWAP/VWAP/POV/AC/immediate in the simulator (paired episodes)
+uv run hftf train ppo --run ppo_mlp_s0   # PPO-MLP, ~2 min on CPU -> runs/ppo_mlp_s0/{best,last}.pt
+uv run hftf eval policy runs/ppo_mlp_s0/best.pt --split val   # vs baselines, paired difference to VWAP
 ```
 
 The raw data is expected at `data/is2/bbg_data/`. Override that with `HFTF_RAW_DIR`. It is licensed

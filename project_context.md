@@ -214,7 +214,8 @@ with `t0 ∈ [09:20, 15:15−H]`. Decision step Δ = 1 min. The residual is forc
 - `x` (to the eFNN): `imb_bar_proxy` (5-min EMA), `log(spread_var_30m+ε)`, `log(rv_30m+ε)`.
   **Use the proxy on all splits.** Train has only proxy days and test only tick days, and the two scales
   differ (std 0.42 vs 0.32). The mixed `l1_imb` column would look like a regime shift.
-- Private: remaining inventory fraction, remaining time fraction, IS so far (bps), last action, schedule deviation.
+- Private: remaining inventory fraction, remaining time fraction, IS so far (bps), last action, schedule deviation,
+  log participation (Q / expected horizon volume), minutes left / 120.
 - Market: `spread_bps`, `dev_vwap_bps`, side-signed `ret_5m`, expected next-5-min profile share,
   side-signed `ctx_nifty_ret_30m`, `ctx_vix`.
 - All features are standardised with **train-split statistics only**. The policy never sees `side`, so every
@@ -228,7 +229,9 @@ with `t0 ∈ [09:20, 15:15−H]`. Decision step Δ = 1 min. The residual is forc
   multiplicative form keeps the meaning of `a` the same for any `Q` and `H`.
 - Reward per step (bps of arrival notional):
   `r_t = −side·(p_exec − m_0)/m_0·(q_t/Q)·1e4 − fees_t − λ·(σ_t·1e4)²·(X_{t+1}/Q)²·Δ`, with `X_{t+1}` the
-  inventory left after the child (discrete Almgren-Chriss variance).
+  inventory left after the child (discrete Almgren-Chriss variance). Training uses `reward.mode: vs_vwap`:
+  the same step of a shadow adaptive VWAP is subtracted. That is action-independent, so the optimum is
+  unchanged, but drift noise falls (ARCHITECTURE §4.6).
   The sum over the episode is `−(IS + fees + λ·risk)`, the AC objective. The discount is `γ = 1` because
   episodes are finite and cost is additive.
 
@@ -380,8 +383,8 @@ available on every bar day.
 |---|---|
 | M0: uv workspace, data audit, final `features_1m_v3`, tests | **done** |
 | M1: `hftf-sim` (BatchEnv, ImpactModel, FeeModel, EpisodeSampler) + TWAP/VWAP/POV/AC baselines | **done** |
-| M2: PPO-MLP | next |
-| M3: static fuzzy → evolving fuzzy | planned |
+| M2: PPO-MLP (beats VWAP on train in 3/3 seeds; docs/RESULTS.md) | **done** |
+| M3: static fuzzy → evolving fuzzy | next |
 | M4: experiments, ablations, robustness, report | planned |
 | M5: full-universe data, TickSim, limit orders | planned |
 

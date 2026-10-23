@@ -13,7 +13,8 @@ from hftf_sim.episodes import Episodes, EpisodeSampler
 from hftf_sim.fees import FeeModel
 from hftf_sim.market import MarketData
 
-Policy = Callable[[BatchExecutionEnv], np.ndarray]  # env state -> child sizes in shares
+# env state -> child sizes in shares, or pace multipliers if the policy sets `action_space = "pace"`
+Policy = Callable[[BatchExecutionEnv], np.ndarray]
 
 
 def sample_episodes(market: MarketData, cfg: EnvConfig, split: str, n: int, seed: int) -> Episodes:
@@ -37,8 +38,9 @@ def run_policy(
             market, cfg, fees=fees, n_envs=len(ep), autoreset=False, randomise_impact=randomise_impact
         )
         env.reset(ep)
+        step = env.step if getattr(policy, "action_space", "shares") == "pace" else env.step_shares
         while not env.done.all():
-            env.step_shares(policy(env))
+            step(policy(env))
         sess = market.sessions.iloc[ep.session].reset_index(drop=True)
         frames.append(
             pd.DataFrame(

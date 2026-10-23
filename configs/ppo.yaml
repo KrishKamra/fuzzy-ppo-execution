@@ -1,15 +1,24 @@
 # PPO defaults (docs/ARCHITECTURE.md §6).
-n_envs: 64
+n_envs: 256                # 64 in ARCHITECTURE §6 v1; 256 halves gradient noise (decision log 2026-10-23)
 rollout_steps: 120
 gamma: 1.0
 gae_lambda: 0.95
 clip: 0.2
 epochs: 10
 minibatches: 8
-lr: 3.0e-4
+lr_anneal: false           # linear decay to 0 over total_timesteps (no clear gain over 3 seeds)
+lr: 1.0e-3                 # 3e-4 learned too slowly at 256 envs (decision log 2026-10-23)
 entropy_coef: 1.0e-3
 value_coef: 0.5
 max_grad_norm: 0.5
 target_kl: 0.02
 trunk: {hidden: [64, 64], activation: tanh}
 seed: 0
+total_timesteps: 6000000
+init_pace: 1.0             # initial mean pace: the untrained policy is a noisy adaptive VWAP
+init_concentration: 8.0    # alpha + beta of the initial Beta
+randomise_impact: true     # domain randomisation during training (env.yaml impact.randomise)
+eval_every: 3              # iterations between deterministic train/val evaluations vs VWAP
+eval_episodes: 2000        # fixed, paired episodes per split
+eval_seed: 12345
+torch_threads: 4

@@ -14,6 +14,8 @@ data_app = typer.Typer(no_args_is_help=True, help="Data validation and feature b
 app.add_typer(data_app, name="data")
 eval_app = typer.Typer(no_args_is_help=True, help="Backtests of baselines and policies in the simulator.")
 app.add_typer(eval_app, name="eval")
+train_app = typer.Typer(no_args_is_help=True, help="Train policies (PPO).")
+app.add_typer(train_app, name="train")
 console = Console()
 
 
@@ -119,6 +121,71 @@ def eval_baselines(
         table.add_row(name, *(f"{v:,.0f}" if c == "episodes" else f"{v:.1f}" for c, v in r.items()))
     console.print(table)
     console.print("bps of arrival notional; obj = IS + fees + risk; vs VWAP = slippage to market VWAP")
+
+
+@train_app.command("ppo")
+def train_ppo(
+    run: str = typer.Option("ppo_mlp", help="Run name; outputs go to runs/<run>/."),
+    config: str = typer.Option("configs/ppo.yaml", help="PPO config."),
+    timesteps: int = typer.Option(0, help="Override total_timesteps (0 = config)."),
+    seed: int = typer.Option(-1, help="Override the seed (-1 = config)."),
+) -> None:
+    """Train PPO-MLP on the train split; keeps best.pt by val objective (early stopping on val)."""
+    from hftf_data.paths import REPO_ROOT
+    from hftf_rl.config import PPOConfig
+    from hftf_rl.ppo import PPOTrainer
+    from hftf_sim import EnvConfig, MarketData
+
+    cfg = PPOConfig.load(REPO_ROOT / config)
+    if timesteps:
+        cfg.total_timesteps = timesteps
+    if seed >= 0:
+        cfg.seed = seed
+    env_cfg = EnvConfig.load()
+    market = MarketData.load(env_cfg.features_path)
+    best = PPOTrainer(cfg, env_cfg, market, REPO_ROOT / "runs" / run).train(log=console.print)
+    console.print(
+        f"[bold]best (val):[/bold] iteration {best.get('iteration')}  {json.dumps(best, indent=None)}"
+    )
+
+
+@eval_app.command("policy")
+def eval_policy(
+    checkpoint: str = typer.Argument(..., help="Path to a checkpoint, e.g. runs/ppo_mlp/best.pt."),
+    split: str = typer.Option("val", help="train | val | test"),
+    episodes: int = typer.Option(4000, help="Parent orders, shared by every policy (paired)."),
+    seed: int = typer.Option(1, help="Episode seed (differs from the trainer's eval seed by default)."),
+    randomise_impact: bool = typer.Option(False, help="Draw impact per episode from the training ranges."),
+) -> None:
+    """A trained policy vs the baselines on identical episodes, with the paired difference to VWAP."""
+    import pandas as pd
+    from rich.table import Table
+
+    from hftf_eval.backtest import run_policy, sample_episodes
+    from hftf_eval.baselines import default_baselines
+    from hftf_eval.metrics import paired_diff, summarize
+    from hftf_rl.ppo import load_policy
+    from hftf_sim import MarketData
+
+    policy, cfg, ckpt = load_policy(checkpoint)
+    market = MarketData.load(cfg.features_path)
+    ep = sample_episodes(market, cfg, split, episodes, seed)
+    policies = [*default_baselines(), policy]
+    df = pd.concat([run_policy(p, market, cfg, ep, randomise_impact=randomise_impact) for p in policies])
+    table_df = summarize(df)
+    table = Table(title=f"{checkpoint} (iteration {ckpt.get('iteration')}) on {split}: {episodes:,} episodes")
+    table.add_column("policy")
+    for h in ("n", "IS", "IS med", "IS sd", "CVaR95", "fees", "obj", "vs VWAP", "kids"):
+        table.add_column(h, justify="right")
+    for name, r in table_df.iterrows():
+        table.add_row(name, *(f"{v:,.0f}" if c == "episodes" else f"{v:.2f}" for c, v in r.items()))
+    console.print(table)
+    for col in ("cost_bps", "is_bps", "fees_bps"):
+        d = paired_diff(df, policy.name, "vwap", col)
+        console.print(
+            f"{policy.name} - vwap, {col}: {d['mean']:+.3f} bps (95% CI {d['lo']:+.3f}, {d['hi']:+.3f}); "
+            f"better on {d['win']:.0%} of episodes"
+        )
 
 
 if __name__ == "__main__":

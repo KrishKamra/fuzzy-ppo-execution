@@ -29,3 +29,13 @@ def summarize(df: pd.DataFrame, by: str = "policy") -> pd.DataFrame:
             "children": g["n_children"].mean(),
         }
     )
+
+
+def paired_diff(df: pd.DataFrame, policy: str, reference: str, col: str = "cost_bps") -> dict[str, float]:
+    """`policy − reference` on identical episodes: mean, standard error, normal 95% CI and win rate."""
+    wide = df.pivot(index="episode", columns="policy", values=col)
+    d = (wide[policy] - wide[reference]).to_numpy()
+    se = float(d.std(ddof=1) / np.sqrt(len(d)))
+    mean = float(d.mean())
+    win = float((d < 0).mean())
+    return {"mean": mean, "se": se, "lo": mean - 1.96 * se, "hi": mean + 1.96 * se, "win": win}

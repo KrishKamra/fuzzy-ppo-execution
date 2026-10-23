@@ -79,7 +79,9 @@ flowchart LR
   the eFNN a source shift that looks like a regime shift. Tick L1 imbalance is reserved for analysis and TickSim.
   Optional extension (config): `rel_volume`, `ofi_norm_5m` (tick days only).
 - **Private `z_p`:** remaining inventory fraction, remaining time fraction, IS so far (bps), last pace
-  action, schedule deviation (executed − VWAP-schedule fraction).
+  action, schedule deviation (executed − VWAP-schedule fraction), and (added in M2) `log_participation` =
+  log(Q / expected horizon volume) and minutes left / 120. Without the last two the policy cannot tell order
+  size or horizon apart, and these set the impact vs per-child-fee trade-off.
 - **Market `z_m`:** `spread_bps`, `dev_vwap_bps` (signed), `ret_5m` (signed by side), expected share of the
   remaining volume in the next 5 min (from the profile), `ctx_nifty_ret_30m` (signed), `ctx_vix`.
 - **Side symmetry (built):** the policy never sees `side`, so every directional column is multiplied by it:
@@ -128,6 +130,13 @@ over-slicing**, so the slice count becomes a real trade-off.
 ```
 r_t = − side · (p_exec,t − m_0)/m_0 · (q_t/Q) · 1e4   − fees_t(bps)   − λ · (σ_t·1e4)² · (X_{t+1}/Q)² · Δ
 ```
+**Per-step credit (`env.yaml reward.mode`, M2).** `arrival` is the formula above. `mark_to_market` splits the
+same IS into each step's execution cost `q_t(p_t − m_t)` plus inventory P&L `X_t(m_t − m_{t−1})`, giving the
+same episode return. `vs_vwap` (the training default) subtracts the same step of a **shadow adaptive VWAP** (a = 1,
+own impact state) run on the same path. Its cost does not depend on our actions, so the optimal policy and
+the policy gradient are unchanged. But the price-drift noise, an episode IS std of ~28 bps against a learnable
+edge of ~0.2 bps, now scales with our deviation from VWAP rather than with the whole order. Reported costs
+are always absolute (`summary()`).
 `m_0` is the mid of the row observed at `t0`. The risk term uses the inventory **left after** the child
 (`X_{t+1}`), as in discrete Almgren-Chriss (`Var = σ²Σ x_k²`, `k ≥ 1`), so immediate execution carries no
 timing risk.
@@ -191,7 +200,12 @@ adjusted mutual information.
 PPO uses the clipped surrogate (ε = 0.2), GAE (γ = 1.0 because episodes are finite and IS-additive,
 λ = 0.95), 10 epochs × 8 minibatches, Adam 3e-4, entropy 1e-3, value-loss coefficient 0.5, gradient
 norm clip 0.5, target-KL early stop at 0.02, advantage normalisation, running observation/reward
-normalisation, and 64 parallel episodes × 120 steps per rollout. The trunk is 2×64 tanh. Policies are
+normalisation, and 64 parallel episodes × 120 steps per rollout. The trunk is 2×64 tanh.
+**As tuned in M2:** 256 envs and lr 1e-3 (64 envs / 3e-4 did not learn within 3M steps), 6M steps, no LR
+annealing (no gain over 3 seeds). The Beta head is initialised to mean pace 1 with α + β = 8, so the
+untrained policy is a noisy adaptive VWAP. Every 3 iterations the deterministic policy (Beta mean) and VWAP run
+on 2,000 fixed paired train and val episodes at default impact, and `best.pt` keeps the best val objective.
+Report on **fresh** episodes (`hftf eval policy`, seed 1), never on the selection set. Policies are
 `MLPActorCritic` (baseline) and `FuzzyActorCritic` (eFNN; also runs as static ANFIS with evolution off).
 After each update, `EvolutionCallback` applies §5.3. Logging goes to TensorBoard and CSV, and checkpoints
 include the fuzzy structure (R varies).
@@ -241,7 +255,7 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 |---|---|---|
 | **M0** ✅ | uv workspace, data audit, final features v3 | `hftf data audit --strict` passes (12/12); tests green |
 | **M1** ✅ | `hftf-sim` + TWAP/VWAP/AC baselines | share conservation and causality tests; TWAP IS ≈ analytic AC cost under the linear-impact config |
-| **M2** | PPO-MLP | beats VWAP on train; val gap reported |
+| **M2** ✅ | PPO-MLP | beats VWAP on train; val gap reported |
 | **M3** | static fuzzy → evolving fuzzy | rule add/merge/prune logged; no PPO instability at edits (KL spikes < target) |
 | **M4** | experiments, ablations, robustness, report | paired stats tables, regime breakdowns, rule narratives |
 | **M5** | full-universe data, TickSim, limit orders | re-run M4 at scale |
@@ -272,3 +286,5 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 | 2026-10-22 | One readiness gate (no tiers); the collector tooling leaves the repo (git history `de800d8`); every transformation is logged in `docs/DATA_TRANSFORMS.md` | the pull is frozen, so pilot/research tiers and pull tooling have no remaining use; the audit stays because R06-R12 guard the cleaning and feature code |
 | 2026-10-23 | M1 simulator as built: every directional observation (incl. the imbalance regime input) is side-signed and scaled without centring; the risk term uses post-child inventory `X_{t+1}`; impact in mid fractions with `V_eff ≥ 1%` of expected volume; whole-share children; forced residual ignores the cap | the policy never sees `side`, so unsigned directional inputs would make buys and sells indistinguishable; post-trade inventory is the discrete AC variance, which makes TWAP match the analytic AC cost exactly (test); the floor stops a zero-volume minute from giving infinite impact |
 | 2026-10-23 | Domain-randomised impact is drawn from each episode's seed; evaluation uses fixed defaults unless `--randomise-impact`; L1-depth half-spread fills are deferred to TickSim | paired comparisons need identical impact per episode across policies; BarSim has no depth on 78% of days |
+| 2026-10-23 | M2: add `log_participation` and minutes-left to `z_p`; benchmark-relative (`vs_vwap`) reward for training; 256 envs, lr 1e-3 | the policy could not see order size or horizon; mark-to-market alone did worse (+0.2-0.4 bps vs VWAP) and arrival stayed at 0 ± 0.1 bps, because drift noise swamps a ~0.2 bps edge; the shadow-VWAP baseline is action-independent, so the optimum is unchanged (test) |
+| 2026-10-23 | PPO-MLP result: beats VWAP on train in 3/3 seeds (−0.16 to −0.24 bps, CIs exclude 0); val −0.24 / +0.06 / −0.04 bps (docs/RESULTS.md) | the gain is timing (IS), not fees; the train→val gap of up to 0.27 bps is the small-data overfitting risk, so model selection and seeds matter for M3/M4 |

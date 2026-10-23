@@ -384,8 +384,8 @@ available on every bar day.
 | M0: uv workspace, data audit, final `features_1m_v3`, tests | **done** |
 | M1: `hftf-sim` (BatchEnv, ImpactModel, FeeModel, EpisodeSampler) + TWAP/VWAP/POV/AC baselines | **done** |
 | M2: PPO-MLP (beats VWAP on train in 3/3 seeds; docs/RESULTS.md) | **done** |
-| M3: static fuzzy → evolving fuzzy | next |
-| M4: experiments, ablations, robustness, report | planned |
+| M3: static fuzzy → evolving fuzzy (edits logged, KL-guarded; docs/RESULTS.md) | **done** |
+| M4: experiments, ablations, robustness, report | next |
 | M5: full-universe data, TickSim, limit orders | planned |
 
 **Data readiness:** `uv run hftf data build-features && uv run hftf data audit --strict` gives pass/fail

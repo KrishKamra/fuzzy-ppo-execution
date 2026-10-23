@@ -1,6 +1,19 @@
-"""hftf_fuzzy: evolving fuzzy neural network in torch (M3).
+"""hftf_fuzzy: evolving fuzzy neural network in torch (ARCHITECTURE §5). No dependency on hftf_sim.
 
-Planned modules (docs/ARCHITECTURE.md §5): membership (Gaussian MFs), layer (EvolvingFuzzyLayer:
-firing, normalisation, TSK heads), evolution (add / merge / prune, function-preserving insertion),
-interpret (linguistic rule report). No dependency on hftf_sim.
+Modules: layer (FuzzyTSK: Gaussian antecedents, softmax-normalised firing, per-rule linear consequents,
+structure edits with optimizer-state remapping), evolution (Evolver: add / merge / prune, function-preserving
+insertion; k-means initialisation), interpret (linguistic rule report).
 """
+
+from hftf_fuzzy.evolution import Event, EvolutionConfig, Evolver, kmeans
+from hftf_fuzzy.layer import FuzzyTSK, bhattacharyya, remap_optimizer_state
+
+__all__ = [
+    "EvolutionConfig",
+    "Event",
+    "Evolver",
+    "FuzzyTSK",
+    "bhattacharyya",
+    "kmeans",
+    "remap_optimizer_state",
+]

@@ -129,10 +129,13 @@ def train_ppo(
     config: str = typer.Option("configs/ppo.yaml", help="PPO config."),
     timesteps: int = typer.Option(0, help="Override total_timesteps (0 = config)."),
     seed: int = typer.Option(-1, help="Override the seed (-1 = config)."),
+    policy: str = typer.Option("", help="mlp | fuzzy (default: the config's policy)."),
+    evolve: bool = typer.Option(True, help="Fuzzy only: structure evolution (off = static ANFIS)."),
+    antecedent_grad: str = typer.Option("", help="Fuzzy only: all | value_only | none (default: efnn.yaml)."),
 ) -> None:
-    """Train PPO-MLP on the train split; keeps best.pt by val objective (early stopping on val)."""
+    """Train PPO (MLP, static fuzzy or eFNN) on the train split; best.pt is picked by val objective."""
     from hftf_data.paths import REPO_ROOT
-    from hftf_rl.config import PPOConfig
+    from hftf_rl.config import EFNNConfig, PPOConfig
     from hftf_rl.ppo import PPOTrainer
     from hftf_sim import EnvConfig, MarketData
 
@@ -141,9 +144,16 @@ def train_ppo(
         cfg.total_timesteps = timesteps
     if seed >= 0:
         cfg.seed = seed
+    if policy:
+        cfg.policy = policy
+    efnn = EFNNConfig.load()
+    efnn.evolution.enabled = evolve
+    if antecedent_grad:
+        efnn.antecedent_grad = antecedent_grad
     env_cfg = EnvConfig.load()
     market = MarketData.load(env_cfg.features_path)
-    best = PPOTrainer(cfg, env_cfg, market, REPO_ROOT / "runs" / run).train(log=console.print)
+    trainer = PPOTrainer(cfg, env_cfg, market, REPO_ROOT / "runs" / run, efnn=efnn)
+    best = trainer.train(log=console.print)
     console.print(
         f"[bold]best (val):[/bold] iteration {best.get('iteration')}  {json.dumps(best, indent=None)}"
     )
@@ -186,6 +196,44 @@ def eval_policy(
             f"{policy.name} - vwap, {col}: {d['mean']:+.3f} bps (95% CI {d['lo']:+.3f}, {d['hi']:+.3f}); "
             f"better on {d['win']:.0%} of episodes"
         )
+
+
+@eval_app.command("rules")
+def eval_rules(
+    checkpoint: str = typer.Argument(..., help="A fuzzy checkpoint, e.g. runs/ppo_efnn_s0/best.pt."),
+    split: str = typer.Option("val", help="Episodes whose observations drive the firing statistics."),
+    episodes: int = typer.Option(2000, help="Parent orders."),
+    seed: int = typer.Option(1, help="Episode seed."),
+) -> None:
+    """Linguistic rule report: IF imbalance ∧ spread-var ∧ RV THEN pace, with each rule's firing share."""
+    from rich.table import Table
+
+    from hftf_eval.backtest import sample_episodes
+    from hftf_rl.interpret import rule_report
+    from hftf_rl.ppo import load_policy
+    from hftf_sim import MarketData
+
+    policy, cfg, ckpt = load_policy(checkpoint)
+    if ckpt["policy"] != "fuzzy":
+        raise typer.BadParameter("not a fuzzy checkpoint")
+    market = MarketData.load(cfg.features_path)
+    rows = rule_report(policy, market, cfg, sample_episodes(market, cfg, split, episodes, seed))
+    table = Table(title=f"{checkpoint}: {len(rows)} rules, firing on {split} ({episodes:,} episodes)")
+    for col in ("rule", "IF imbalance", "spread-var", "RV", "THEN pace", "share"):
+        table.add_column(col, justify="right" if col in ("rule", "THEN pace", "share") else "left")
+    for r in rows:
+        table.add_row(
+            str(r["rule"]),
+            f"{r['imbalance_term']} ({r['imbalance_c']:+.2f})",
+            f"{r['spread_var_term']} ({r['spread_var_c']:+.2f})",
+            f"{r['rv_term']} ({r['rv_c']:+.2f})",
+            f"{r['pace']:.2f}",
+            f"{r['share']:.1%}",
+        )
+    console.print(table)
+    console.print(
+        "Centres in train-standardised units; terms from train terciles. Imbalance is signed by side."
+    )
 
 
 if __name__ == "__main__":

@@ -15,12 +15,14 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from hftf_fuzzy.evolution import Evolver, kmeans
+from hftf_fuzzy.layer import remap_optimizer_state
 from hftf_rl.buffer import RolloutBuffer
-from hftf_rl.config import PPOConfig
+from hftf_rl.config import EFNNConfig, PPOConfig
 from hftf_rl.normalize import RewardScaler, RunningMeanStd
-from hftf_rl.policies import POLICIES, MLPActorCritic
+from hftf_rl.policies import POLICIES, FuzzyActorCritic, MLPActorCritic
 from hftf_sim.config import EnvConfig
-from hftf_sim.env import BatchExecutionEnv
+from hftf_sim.env import REGIME_SLICE, BatchExecutionEnv
 from hftf_sim.episodes import Episodes, EpisodeSampler
 from hftf_sim.market import MarketData
 
@@ -53,7 +55,7 @@ def vwap_policy(env: BatchExecutionEnv) -> np.ndarray:
 def save_checkpoint(path: Path, model, obs_rms, ppo_cfg, env_cfg, names, extra: dict) -> None:
     torch.save(
         {
-            "policy": "mlp",
+            "policy": model.kind,
             "arch": model.arch,
             "model": model.state_dict(),
             "obs_rms": obs_rms.state_dict(),
@@ -66,18 +68,34 @@ def save_checkpoint(path: Path, model, obs_rms, ppo_cfg, env_cfg, names, extra: 
     )
 
 
-def load_policy(path: str | Path, name: str = "ppo_mlp") -> tuple[PacePolicy, EnvConfig, dict]:
+def policy_name(ckpt: dict) -> str:
+    """ppo_mlp, ppo_anfis (fuzzy, evolution off) or ppo_efnn."""
+    if ckpt["policy"] == "mlp":
+        return "ppo_mlp"
+    evolving = (ckpt.get("efnn_cfg") or {}).get("evolution", {}).get("enabled", True)
+    return "ppo_efnn" if evolving else "ppo_anfis"
+
+
+def load_policy(path: str | Path, name: str | None = None) -> tuple[PacePolicy, EnvConfig, dict]:
     ckpt = torch.load(path, map_location="cpu", weights_only=False)
     model = POLICIES[ckpt["policy"]](**ckpt["arch"])
     model.load_state_dict(ckpt["model"])
     model.eval()
-    policy = PacePolicy(model, RunningMeanStd.from_state(ckpt["obs_rms"]), name)
+    policy = PacePolicy(model, RunningMeanStd.from_state(ckpt["obs_rms"]), name or policy_name(ckpt))
     return policy, EnvConfig.model_validate(ckpt["env_cfg"]), ckpt
 
 
 class PPOTrainer:
-    def __init__(self, cfg: PPOConfig, env_cfg: EnvConfig, market: MarketData, run_dir: str | Path) -> None:
+    def __init__(
+        self,
+        cfg: PPOConfig,
+        env_cfg: EnvConfig,
+        market: MarketData,
+        run_dir: str | Path,
+        efnn: EFNNConfig | None = None,
+    ) -> None:
         self.cfg, self.env_cfg, self.market = cfg, env_cfg, market
+        self.efnn = efnn or EFNNConfig()
         self.run_dir = Path(run_dir)
         self.run_dir.mkdir(parents=True, exist_ok=True)
         torch.manual_seed(cfg.seed)
@@ -92,16 +110,30 @@ class PPOTrainer:
             seed=cfg.seed,
         )
         dim = self.env.obs_dim
-        self.model = MLPActorCritic(
-            dim,
-            cfg.trunk.hidden,
-            env_cfg.action.a_max,
-            cfg.trunk.activation,
-            cfg.init_pace,
-            cfg.init_concentration,
-        )
-        self.opt = torch.optim.Adam(self.model.parameters(), lr=cfg.lr, eps=1e-5)
-        self.obs_rms = RunningMeanStd((dim,))
+        common = (dim, cfg.trunk.hidden, env_cfg.action.a_max, cfg.trunk.activation)
+        common = (*common, cfg.init_pace, cfg.init_concentration)
+        self.fuzzy = cfg.policy == "fuzzy"
+        if self.fuzzy:
+            self.model = FuzzyActorCritic(
+                *common,
+                n_rules=self.efnn.init_rules,
+                regime_dim=REGIME_SLICE.stop,
+                antecedent_grad=self.efnn.antecedent_grad,
+            )
+            ante = self.model.fuzzy.antecedent_parameters()
+            rest = [p for p in self.model.parameters() if all(p is not a for a in ante)]
+            groups = [{"params": rest}, {"params": ante, "lr_scale": self.efnn.antecedent_lr_scale}]
+            self.evolver = Evolver(self.efnn.evolution_config(), self.efnn.init_rules)
+            self.events_path = self.run_dir / "events.csv"
+            self.events_path.write_text("iteration,kind,rules,n_rules,accepted,kl,detail\n")
+            self.initialised = False
+        else:
+            self.model = MLPActorCritic(*common)
+            groups = [{"params": list(self.model.parameters())}]
+        for g in groups:
+            g["lr"] = cfg.lr * g.get("lr_scale", 1.0)
+        self.opt = torch.optim.Adam(groups, lr=cfg.lr, eps=1e-5)
+        self.obs_rms = RunningMeanStd((dim,), passthrough=REGIME_SLICE.stop)
         self.scaler = RewardScaler(cfg.n_envs, cfg.gamma)
         self.buffer = RolloutBuffer(cfg.rollout_steps, cfg.n_envs, dim)
         rng = np.random.default_rng(cfg.eval_seed)
@@ -180,6 +212,53 @@ class PPOTrainer:
         out["early_stop"] = float(stop)
         return out
 
+    # ---------------------------------------------------------- fuzzy layer
+    def _regime_samples(self) -> torch.Tensor:
+        x = self.buffer.obs[..., REGIME_SLICE].reshape(-1, REGIME_SLICE.stop)
+        return torch.as_tensor(x)
+
+    def init_rules(self) -> None:
+        """R0 rules from k-means on the first rollout's regime inputs. Function-preserving, because every
+        rule starts with the same consequents."""
+        centres, std = kmeans(self._regime_samples(), self.efnn.init_rules, seed=self.cfg.seed)
+        layer = self.model.fuzzy
+        snap = layer.snapshot()
+        snap["centres"] = centres
+        width = (std * self.efnn.init_width_scale).clamp_min(self.efnn.evolution.min_width)
+        snap["rho"] = torch.log(torch.expm1(width))
+        layer.restore(snap)
+        self.initialised = True
+
+    def evolve(self, iteration: int) -> dict[str, float]:
+        """One structure-evolution pass after the PPO update, before the next rollout (ARCHITECTURE §5.3).
+        The pass's policy change is measured as KL(pi_before || pi_after) on buffer observations; a pass
+        above `edit_kl_max` is undone. Accepted edits keep Adam moments for surviving rules."""
+        layer, n = self.model.fuzzy, self.buffer.obs.shape[0] * self.buffer.obs.shape[1]
+        obs = torch.as_tensor(self.buffer.obs.reshape(n, -1))
+        idx = torch.randperm(n)[: self.efnn.edit_kl_samples]
+        with torch.no_grad():
+            before, _ = self.model(obs[idx])
+        snap, state = layer.snapshot(), self.evolver.state()
+        events = self.evolver.step(layer, self._regime_samples())
+        kl, accepted = 0.0, True
+        if events:
+            with torch.no_grad():
+                after, _ = self.model(obs[idx])
+                kl = float(torch.distributions.kl_divergence(before, after).mean())
+            accepted = kl <= self.efnn.edit_kl_max
+            if accepted:
+                remap_optimizer_state(self.opt, layer)
+            else:
+                layer.restore(snap)
+                self.evolver.restore(state)
+                self.evolver.cooldown = self.evolver.cfg.cooldown_iters
+            with self.events_path.open("a") as fh:
+                for e in events:
+                    rules = " ".join(map(str, e.rules))
+                    detail = json.dumps(e.detail).replace(",", ";")
+                    fh.write(f"{iteration},{e.kind},{rules},{e.n_rules},{int(accepted)},{kl:.6f},{detail}\n")
+        return {"n_rules": float(layer.n_rules), "edit_kl": kl, "edits": float(len(events) * accepted)}
+
     # ------------------------------------------------------------- evaluation
     def evaluate(self) -> dict[str, float]:
         policy = PacePolicy(self.model, self.obs_rms)
@@ -195,6 +274,8 @@ class PPOTrainer:
 
     def _save(self, name: str, iteration: int, metrics: dict) -> None:
         extra = {"iteration": iteration, "metrics": metrics}
+        if self.fuzzy:
+            extra["efnn_cfg"] = self.efnn.model_dump()
         save_checkpoint(
             self.run_dir / name, self.model, self.obs_rms, self.cfg, self.env_cfg, self.env.names, extra
         )
@@ -214,9 +295,13 @@ class PPOTrainer:
                 self.episode_costs = []
                 if cfg.lr_anneal:
                     for g in self.opt.param_groups:
-                        g["lr"] = cfg.lr * (1 - (it - 1) / iterations)
+                        g["lr"] = cfg.lr * g.get("lr_scale", 1.0) * (1 - (it - 1) / iterations)
                 self.collect()
+                if self.fuzzy and not self.initialised:
+                    self.init_rules()
                 row = {"iteration": it, "timesteps": it * per_iter, **self.update()}
+                if self.fuzzy:
+                    row.update(self.evolve(it))
                 costs = self.episode_costs
                 row["train_episode_cost"] = float(np.mean(costs)) if costs else np.nan
                 if it % cfg.eval_every == 0 or it == iterations:

@@ -57,3 +57,43 @@ def test_trainer_runs_and_checkpoint_round_trips(tmp_path):
     ep = EpisodeSampler(market, cfg_loaded.episode, "val").sample(16, np.random.default_rng(cfg.eval_seed))
     summary = evaluate(policy, market, cfg_loaded, ep)
     assert np.array_equal(summary["executed"], ep.qty)
+
+
+def test_fuzzy_policy_starts_as_noisy_vwap_and_respects_antecedent_grad():
+    from hftf_rl.policies import FuzzyActorCritic
+
+    obs = torch.as_tensor(np.random.default_rng(2).normal(size=(128, 15)).astype(np.float32))
+    for mode in ("all", "value_only", "none"):
+        model = FuzzyActorCritic(15, [64, 64], 4.0, n_rules=4, antecedent_grad=mode)
+        np.testing.assert_allclose(model.mean_pace(obs.numpy()), 1.0, atol=0.05)
+        with torch.no_grad():  # different antecedents, same consequents: same output
+            model.fuzzy.centres.normal_()
+        np.testing.assert_allclose(model.mean_pace(obs.numpy()), 1.0, atol=0.05)
+        with torch.no_grad():
+            model.fuzzy.actor_b.normal_()  # rules now disagree, so phi matters
+        actor_grad = torch.autograd.grad(model(obs)[0].mean.sum(), model.fuzzy.centres, allow_unused=True)[0]
+        critic_grad = torch.autograd.grad(model(obs)[1].sum(), model.fuzzy.centres, allow_unused=True)[0]
+        assert (actor_grad is not None and actor_grad.abs().sum() > 0) == (mode == "all")
+        assert (critic_grad is not None) == (mode != "none")
+
+
+def test_fuzzy_trainer_logs_events_and_checkpoint_keeps_the_evolved_structure(tmp_path):
+    from hftf_rl.config import EFNNConfig, EvolutionSettings
+
+    df = synthetic_frame(n_sessions=3)
+    df.loc[df["date"] == df["date"].max(), "split"] = "val"
+    market = MarketData.from_frame(df, stats=STATS)
+    cfg = PPOConfig(
+        policy="fuzzy", n_envs=8, rollout_steps=40, total_timesteps=8 * 40 * 4, epochs=2, minibatches=2,
+        eval_every=1, eval_episodes=16, torch_threads=1,
+    )  # fmt: skip
+    efnn = EFNNConfig(evolution=EvolutionSettings(tau_add=0.99, n_min_uncovered=1, cooldown_iters=0))
+    trainer = PPOTrainer(cfg, EnvConfig.load(), market, tmp_path, efnn=efnn)
+    trainer.train(log=lambda *_: None)
+    events = (tmp_path / "events.csv").read_text().strip().splitlines()
+    assert events[0].startswith("iteration,kind") and len(events) > 1
+    assert all(float(line.split(",")[5]) >= 0 for line in events[1:])
+    policy, _, ckpt = load_policy(tmp_path / "last.pt")
+    assert policy.name == "ppo_efnn"
+    assert policy.model.fuzzy.n_rules == ckpt["arch"]["n_rules"] == trainer.model.fuzzy.n_rules
+    assert policy.obs_rms.passthrough == 3

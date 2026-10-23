@@ -165,6 +165,14 @@ Heads are fuzzy-gated mixtures of linear experts over the trunk embedding `h = M
 actor:  (α, β) = 1 + softplus( Σ_r φ_r · (A_r h + b_r) )
 critic: V      =             Σ_r φ_r · (u_r·h + d_r)
 ```
+**As built (M3, `hftf_fuzzy/layer.py`):**
+- `φ` is a softmax of `log m_r + log τ_r`, so it never underflows far from every rule; such points go to the nearest rule.
+- `m_r` is a per-rule **support mass**, a buffer that is not trained: 1 for a new rule, and the sum of the two
+  masses for a merge, so merging two identical rules is exactly function-preserving.
+- `x` is the env's train-standardised regime input: the running observation normaliser passes those 3 dims
+  through, so the MFs see a fixed scale.
+- All rules start with identical consequents, so the initial policy equals the MLP's noisy VWAP whatever the
+  antecedents are.
 
 ### 5.2 Parameter learning: "Bellman updates shape the memberships"
 `c_r` and `ρ_r` are `nn.Parameter`s. The PPO loss `L = L_clip − c_e·H + c_v·L_V` back-propagates into
@@ -188,6 +196,14 @@ ratio needs the stored `log π_old` to come from the exact network that collecte
    After each edit, rebuild the optimizer param groups (keep Adam state for surviving tensors) and log
    the event.
 Initialisation: `R0 = 4` rules from k-means on the regime inputs of the training split's first rollout.
+**As built:**
+- Each evolution pass's policy change is measured as `KL(π_before ‖ π_after)` on 8,192 buffer observations,
+  and a pass with KL > `edit_kl_max` (= `target_kl`, 0.02) is **undone** and logged as rejected. The exit
+  criterion is therefore enforced, not just hoped for.
+- Edits keep the same `Parameter` objects and remap Adam moments row by row (`remap_optimizer_state`), with new
+  rows starting from zero.
+- Events go to `runs/<run>/events.csv` (iteration, kind, rules, R, accepted, KL), and `n_rules` and `edit_kl` go to `progress.csv`.
+- Initial widths are the k-means cluster std, floored at 0.1.
 
 ### 5.4 Interpretability
 Each rule centre is mapped to linguistic terms per input (Low/Med/High from train terciles) and to its
@@ -256,7 +272,7 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 | **M0** ✅ | uv workspace, data audit, final features v3 | `hftf data audit --strict` passes (12/12); tests green |
 | **M1** ✅ | `hftf-sim` + TWAP/VWAP/AC baselines | share conservation and causality tests; TWAP IS ≈ analytic AC cost under the linear-impact config |
 | **M2** ✅ | PPO-MLP | beats VWAP on train; val gap reported |
-| **M3** | static fuzzy → evolving fuzzy | rule add/merge/prune logged; no PPO instability at edits (KL spikes < target) |
+| **M3** ✅ | static fuzzy → evolving fuzzy | rule add/merge/prune logged; no PPO instability at edits (KL spikes < target) |
 | **M4** | experiments, ablations, robustness, report | paired stats tables, regime breakdowns, rule narratives |
 | **M5** | full-universe data, TickSim, limit orders | re-run M4 at scale |
 
@@ -288,3 +304,5 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 | 2026-10-23 | Domain-randomised impact is drawn from each episode's seed; evaluation uses fixed defaults unless `--randomise-impact`; L1-depth half-spread fills are deferred to TickSim | paired comparisons need identical impact per episode across policies; BarSim has no depth on 78% of days |
 | 2026-10-23 | M2: add `log_participation` and minutes-left to `z_p`; benchmark-relative (`vs_vwap`) reward for training; 256 envs, lr 1e-3 | the policy could not see order size or horizon; mark-to-market alone did worse (+0.2-0.4 bps vs VWAP) and arrival stayed at 0 ± 0.1 bps, because drift noise swamps a ~0.2 bps edge; the shadow-VWAP baseline is action-independent, so the optimum is unchanged (test) |
 | 2026-10-23 | PPO-MLP result: beats VWAP on train in 3/3 seeds (−0.16 to −0.24 bps, CIs exclude 0); val −0.24 / +0.06 / −0.04 bps (docs/RESULTS.md) | the gain is timing (IS), not fees; the train→val gap of up to 0.27 bps is the small-data overfitting risk, so model selection and seeds matter for M3/M4 |
+| 2026-10-23 | M3 eFNN as built: softmax-normalised firing with a per-rule support mass (merges of duplicates are exact); regime inputs bypass the running normaliser; edits keep Parameter objects and remap Adam moments row by row; an evolution pass whose policy KL on the buffer exceeds `target_kl` is undone | no underflow far from rules; MFs need a fixed input scale; the KL guard makes "no PPO instability at edits" enforced and auditable (0 rejections in 3 seeds, max edit KL 0.016) |
+| 2026-10-23 | M3 result: fuzzy ≥ MLP on train (−0.20/−0.21 vs −0.17 bps vs VWAP, 3 seeds), but no policy beats VWAP reliably on val, and the M2 val gain did not replicate | the train→val gap dominates; M4 first reduces variance and overfitting (more seeds, ensembling, selection set), then compares architectures |

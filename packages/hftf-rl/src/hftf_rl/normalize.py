@@ -8,12 +8,14 @@ CLIP = 10.0
 
 
 class RunningMeanStd:
-    """Parallel-update running mean and variance (Chan et al.)."""
+    """Parallel-update running mean and variance (Chan et al.). The first `passthrough` features are left
+    as they are: the regime inputs are train-standardised by the env, and the MFs need a fixed scale."""
 
-    def __init__(self, shape: tuple[int, ...] = ()) -> None:
+    def __init__(self, shape: tuple[int, ...] = (), passthrough: int = 0) -> None:
         self.mean = np.zeros(shape)
         self.var = np.ones(shape)
         self.count = 1e-4
+        self.passthrough = passthrough
 
     def update(self, x: np.ndarray) -> None:
         mean, var, n = x.mean(axis=0), x.var(axis=0), x.shape[0]
@@ -23,14 +25,22 @@ class RunningMeanStd:
         self.count = total
 
     def normalize(self, x: np.ndarray) -> np.ndarray:
-        return np.clip((x - self.mean) / np.sqrt(self.var + 1e-8), -CLIP, CLIP)
+        out = np.clip((x - self.mean) / np.sqrt(self.var + 1e-8), -CLIP, CLIP)
+        if self.passthrough:
+            out[..., : self.passthrough] = x[..., : self.passthrough]
+        return out
 
     def state_dict(self) -> dict:
-        return {"mean": self.mean.tolist(), "var": self.var.tolist(), "count": self.count}
+        return {
+            "mean": self.mean.tolist(),
+            "var": self.var.tolist(),
+            "count": self.count,
+            "passthrough": self.passthrough,
+        }
 
     @classmethod
     def from_state(cls, state: dict) -> RunningMeanStd:
-        rms = cls()
+        rms = cls(passthrough=state.get("passthrough", 0))
         rms.mean, rms.var, rms.count = np.asarray(state["mean"]), np.asarray(state["var"]), state["count"]
         return rms
 

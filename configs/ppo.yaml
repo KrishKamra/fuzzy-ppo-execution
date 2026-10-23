@@ -1,4 +1,5 @@
 # PPO defaults (docs/ARCHITECTURE.md §6).
+policy: mlp                # mlp | fuzzy (configs/efnn.yaml)
 n_envs: 256                # 64 in ARCHITECTURE §6 v1; 256 halves gradient noise (decision log 2026-10-23)
 rollout_steps: 120
 gamma: 1.0

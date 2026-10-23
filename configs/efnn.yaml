@@ -4,6 +4,9 @@ min_rules: 2
 max_rules: 16
 antecedent_grad: all        # all | value_only | none
 antecedent_lr_scale: 0.3
+init_width_scale: 1.0     # k-means cluster std x this = initial MF width
+edit_kl_max: 0.02         # reject a structure edit whose policy KL on the buffer exceeds this (= PPO target_kl)
+edit_kl_samples: 8192
 evolution:
   enabled: true
   tau_add: 0.15
@@ -15,3 +18,4 @@ evolution:
   max_adds_per_iter: 1
   max_prunes_per_iter: 1
   cooldown_iters: 3
+  min_width: 0.1            # floor for a new rule's width (standardised units)

@@ -2,5 +2,6 @@
 
 Built (M2): config (PPOConfig), policies (MLPActorCritic, Beta pace head), buffer (rollouts + GAE),
 normalize (observation / reward scaling), ppo (PPOTrainer, checkpoints, PacePolicy, load_policy).
-Planned (M3, docs/ARCHITECTURE.md §5-6): FuzzyActorCritic, EvolutionCallback.
+Built (M3): FuzzyActorCritic (TSK heads over hftf_fuzzy), k-means rule init and KL-guarded structure
+evolution inside PPOTrainer (events.csv), interpret (rule report).
 """

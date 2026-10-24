@@ -27,25 +27,34 @@ def train_regime_terciles(market: MarketData) -> np.ndarray:
 
 
 def collect(policy: PacePolicy, market: MarketData, cfg: EnvConfig, episodes: Episodes):
-    """Normalised observations and deterministic paces at every live decision."""
+    """Normalised observations, deterministic paces and session ids at every live decision."""
     env = BatchExecutionEnv(market, cfg, n_envs=len(episodes), autoreset=False, randomise_impact=False)
     env.reset(episodes)
-    obs, pace = [], []
+    obs, pace, session = [], [], []
     while not env.done.all():
         live = ~env.done
         o = policy.obs_rms.normalize(env.observe()).astype(np.float32)
         a = policy.model.mean_pace(o)
         obs.append(o[live])
         pace.append(a[live])
+        session.append(env.ep.session[live])
         env.step(a)
-    return np.concatenate(obs), np.concatenate(pace)
+    return np.concatenate(obs), np.concatenate(pace), np.concatenate(session)
 
 
 def rule_report(policy: PacePolicy, market: MarketData, cfg: EnvConfig, episodes: Episodes) -> list[dict]:
     layer = policy.model.fuzzy
-    obs, pace = collect(policy, market, cfg, episodes)
+    obs, pace, _ = collect(policy, market, cfg, episodes)
     share, rule_pace = firing_summary(layer, torch.as_tensor(obs[:, REGIME_SLICE]), pace)
     rows = rule_table(layer, train_regime_terciles(market), INPUTS, TERMS)
     for r in rows:
         r["share"], r["pace"] = float(share[r["rule"]]), float(rule_pace[r["rule"]])
     return sorted(rows, key=lambda r: -r["share"])
+
+
+def dominant_rules(policy: PacePolicy, market: MarketData, cfg: EnvConfig, episodes: Episodes):
+    """The most strongly firing rule and the session id at every live decision (for rule-regime AMI)."""
+    obs, _, session = collect(policy, market, cfg, episodes)
+    with torch.no_grad():
+        phi = policy.model.fuzzy.phi(torch.as_tensor(obs[:, REGIME_SLICE]))
+    return phi.argmax(-1).numpy(), session

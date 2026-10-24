@@ -3,6 +3,7 @@ init_rules: 4
 min_rules: 2
 max_rules: 16
 antecedent_grad: all        # all | value_only | none
+gate: soft                  # soft | hard (one-hot φ: the k-means gate ablation; needs evolution off)
 antecedent_lr_scale: 0.3
 init_width_scale: 1.0     # k-means cluster std x this = initial MF width
 edit_kl_max: 0.02         # reject a structure edit whose policy KL on the buffer exceeds this (= PPO target_kl)

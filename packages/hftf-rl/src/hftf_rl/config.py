@@ -71,6 +71,7 @@ class EFNNConfig(BaseModel):
     min_rules: int = 2
     max_rules: int = 16
     antecedent_grad: Literal["all", "value_only", "none"] = "all"
+    gate: Literal["soft", "hard"] = "soft"  # hard: one-hot φ (k-means partition ablation), evolution off
     antecedent_lr_scale: float = 0.3
     init_width_scale: float = 1.0  # k-means cluster std x this = initial MF width
     edit_kl_max: float = 0.02  # reject a structure edit whose policy KL on the buffer exceeds this

@@ -69,9 +69,11 @@ def save_checkpoint(path: Path, model, obs_rms, ppo_cfg, env_cfg, names, extra: 
 
 
 def policy_name(ckpt: dict) -> str:
-    """ppo_mlp, ppo_anfis (fuzzy, evolution off) or ppo_efnn."""
+    """ppo_mlp, ppo_hard_gate (one-hot rules), ppo_anfis (fuzzy, evolution off) or ppo_efnn."""
     if ckpt["policy"] == "mlp":
         return "ppo_mlp"
+    if ckpt["arch"].get("gate") == "hard":
+        return "ppo_hard_gate"
     evolving = (ckpt.get("efnn_cfg") or {}).get("evolution", {}).get("enabled", True)
     return "ppo_efnn" if evolving else "ppo_anfis"
 
@@ -83,6 +85,22 @@ def load_policy(path: str | Path, name: str | None = None) -> tuple[PacePolicy, 
     model.eval()
     policy = PacePolicy(model, RunningMeanStd.from_state(ckpt["obs_rms"]), name or policy_name(ckpt))
     return policy, EnvConfig.model_validate(ckpt["env_cfg"]), ckpt
+
+
+class EnsemblePolicy:
+    """Mean pace of several trained policies (e.g. one per seed). Each member normalises its own input."""
+
+    action_space = "pace"
+
+    def __init__(self, members: list[PacePolicy], name: str) -> None:
+        self.members, self.name = members, name
+
+    def __call__(self, env: BatchExecutionEnv) -> np.ndarray:
+        return np.mean([m(env) for m in self.members], axis=0)
+
+
+def load_ensemble(paths: list[str | Path], name: str) -> EnsemblePolicy:
+    return EnsemblePolicy([load_policy(p)[0] for p in paths], name)
 
 
 class PPOTrainer:
@@ -119,7 +137,10 @@ class PPOTrainer:
                 n_rules=self.efnn.init_rules,
                 regime_dim=REGIME_SLICE.stop,
                 antecedent_grad=self.efnn.antecedent_grad,
+                gate=self.efnn.gate,
             )
+            if self.efnn.gate == "hard" and self.efnn.evolution.enabled:
+                raise ValueError("gate: hard needs evolution off (merges and adds assume soft firing)")
             ante = self.model.fuzzy.antecedent_parameters()
             rest = [p for p in self.model.parameters() if all(p is not a for a in ante)]
             groups = [{"params": rest}, {"params": ante, "lr_scale": self.efnn.antecedent_lr_scale}]
@@ -273,7 +294,12 @@ class PPOTrainer:
         return out
 
     def _save(self, name: str, iteration: int, metrics: dict) -> None:
-        extra = {"iteration": iteration, "metrics": metrics}
+        extra = {
+            "iteration": iteration,
+            "metrics": metrics,
+            "market_stats": self.market.stats,  # the observation scaler: reused when evaluating
+            "securities": sorted(self.market.sessions["security"].unique()),
+        }
         if self.fuzzy:
             extra["efnn_cfg"] = self.efnn.model_dump()
         save_checkpoint(

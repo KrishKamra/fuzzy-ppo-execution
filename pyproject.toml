@@ -54,6 +54,9 @@ extend-exclude = ["data", "notebooks"]
 select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "NPY", "PD"]
 ignore = ["N803", "N806", "PD010", "PD013"]  # stack/unstack are idiomatic here
 
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["typer.Argument", "typer.Option"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["hftf_data", "hftf_sim", "hftf_fuzzy", "hftf_rl", "hftf_eval", "hftf_cli"]
 

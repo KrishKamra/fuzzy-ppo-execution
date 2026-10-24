@@ -137,6 +137,12 @@ own impact state) run on the same path. Its cost does not depend on our actions,
 the policy gradient are unchanged. But the price-drift noise, an episode IS std of ~28 bps against a learnable
 edge of ~0.2 bps, now scales with our deviation from VWAP rather than with the whole order. Reported costs
 are always absolute (`summary()`).
+**Expected price drift (`reward.price_drift`, M4; default `expected`).** The inventory term `X_t(m_t − m_{t−1})`
+is replaced by its martingale expectation, 0, so the training return is the expected cost plus the risk
+penalty, which is the Almgren-Chriss mean-variance objective. With `realised` (M2/M3), the whole train edge was
+timing against the 180 train price paths: re-evaluated at zero impact, it was unchanged, and it vanished on val.
+With `expected`, the edge is impact reduction and transfers to val (docs/RESULTS.md, M4). Evaluation always
+charges the realised IS.
 `m_0` is the mid of the row observed at `t0`. The risk term uses the inventory **left after** the child
 (`X_{t+1}`), as in discrete Almgren-Chriss (`Var = σ²Σ x_k²`, `k ≥ 1`), so immediate execution carries no
 timing risk.
@@ -240,7 +246,13 @@ include the fuzzy structure (R varies).
   completion rate, and participation profile. Results are broken down by regime (eval labels).
   Rule count over training, rule-regime AMI.
 - **Statistics:** every policy runs on identical episode seeds (paired). We report paired bootstrap
-  95% CIs and Wilcoxon signed-rank tests against VWAP and PPO-MLP.
+  95% CIs and Wilcoxon signed-rank tests against VWAP and PPO-MLP. **As built (M4, `hftf_eval.stats`):** the
+  bootstrap resamples whole (security, date) sessions, because episodes on one session share a price path; on
+  val (60 sessions) this CI is about 2× the per-episode one. Wilcoxon runs on per-session mean differences.
+  Policies are reported as **seed ensembles** (mean pace of the seeds' `best.pt`), with every seed listed too.
+- **Leave-one-stock-out (as built):** `hftf train ppo --hold-out SEC` trains and fits the observation scaler on
+  the other two names. The checkpoint stores the scaler, and `hftf eval compare --security SEC` evaluates on
+  the unseen name.
 - **Robustness:** sweep the impact parameters off the training range.
 
 ## 8. Repository layout (uv workspace monorepo)
@@ -273,7 +285,7 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 | **M1** ✅ | `hftf-sim` + TWAP/VWAP/AC baselines | share conservation and causality tests; TWAP IS ≈ analytic AC cost under the linear-impact config |
 | **M2** ✅ | PPO-MLP | beats VWAP on train; val gap reported |
 | **M3** ✅ | static fuzzy → evolving fuzzy | rule add/merge/prune logged; no PPO instability at edits (KL spikes < target) |
-| **M4** | experiments, ablations, robustness, report | paired stats tables, regime breakdowns, rule narratives |
+| **M4** ✅ | experiments, ablations, robustness, report | paired stats tables, regime breakdowns, rule narratives |
 | **M5** | full-universe data, TickSim, limit orders | re-run M4 at scale |
 
 ## 10. Key risks
@@ -306,3 +318,7 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 | 2026-10-23 | PPO-MLP result: beats VWAP on train in 3/3 seeds (−0.16 to −0.24 bps, CIs exclude 0); val −0.24 / +0.06 / −0.04 bps (docs/RESULTS.md) | the gain is timing (IS), not fees; the train→val gap of up to 0.27 bps is the small-data overfitting risk, so model selection and seeds matter for M3/M4 |
 | 2026-10-23 | M3 eFNN as built: softmax-normalised firing with a per-rule support mass (merges of duplicates are exact); regime inputs bypass the running normaliser; edits keep Parameter objects and remap Adam moments row by row; an evolution pass whose policy KL on the buffer exceeds `target_kl` is undone | no underflow far from rules; MFs need a fixed input scale; the KL guard makes "no PPO instability at edits" enforced and auditable (0 rejections in 3 seeds, max edit KL 0.016) |
 | 2026-10-23 | M3 result: fuzzy ≥ MLP on train (−0.20/−0.21 vs −0.17 bps vs VWAP, 3 seeds), but no policy beats VWAP reliably on val, and the M2 val gain did not replicate | the train→val gap dominates; M4 first reduces variance and overfitting (more seeds, ensembling, selection set), then compares architectures |
+| 2026-10-24 | Training reward uses the expected price drift (`reward.price_drift: expected`): the inventory × mid-move term is dropped; evaluation still charges the realised IS | M2/M3 policies' train edge was entirely timing against the 180 train price paths (unchanged at zero impact) and did not transfer to val; with the martingale reward, the edge is impact reduction and transfers (MLP val −0.24 bps, cluster CI −0.34 to −0.14) |
+| 2026-10-24 | Report session-cluster bootstrap CIs and session-level Wilcoxon tests, and seed ensembles as the headline policy | episodes on one session are correlated (per-episode CIs were ~2× too narrow on val); ensembling removes the seed lottery that made the M2 val result non-reproducible |
+| 2026-10-24 | Leave-one-stock-out refits the observation scaler on the training names, and checkpoints store their scaler | no statistic of the held-out name reaches the policy |
+| 2026-10-24 | M4 result: on the test split (run once), 5-seed ensembles beat VWAP by −0.16 (MLP), −0.24 (ANFIS) and −0.22 (eFNN) bps, all CIs excluding 0; they also beat TWAP/AC and win on held-out stocks (LOSO). Fuzzy − MLP on test −0.06 to −0.08 (Wilcoxon n.s.); eFNN ≈ ANFIS everywhere; eFNN > MLP under strong or persistent transient impact | the reward design, not the architecture, is the main effect; the fuzzy advantage is suggestive at default impact and clear only off the training range of transient impact (docs/RESULTS.md M4) |

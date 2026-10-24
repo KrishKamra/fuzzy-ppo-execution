@@ -7,6 +7,8 @@ every episode completes. Rewards are in bps of arrival notional `Q · m0`:
     r_k = −side·(p_k − m0)/m0·(q_k/Q)·1e4 − fees_k − λ·(σ_k·1e4)²·(X_{k+1}/Q)²
 
 with `X_{k+1}` the inventory left after the child, so an episode's return is −(IS + fees + λ·risk).
+With `reward.price_drift = expected` the inventory × mid-move part of the mark-to-market split is dropped (its
+martingale expectation is 0), so the return is the expected cost plus the risk penalty.
 """
 
 from __future__ import annotations
@@ -67,6 +69,9 @@ class BatchExecutionEnv:
         self.cap = cfg.action.participation_cap
         self.risk_aversion = cfg.reward.risk_aversion
         self.reward_mode = cfg.reward.mode
+        if cfg.reward.price_drift == "expected" and self.reward_mode == "arrival":
+            raise ValueError("price_drift: expected needs reward mode mark_to_market or vs_vwap")
+        self.drift = float(cfg.reward.price_drift == "realised")
         self.impact = ImpactModel(cfg.impact, n_envs)
         self.names = obs_names(market)
         self.signed = np.concatenate(
@@ -178,7 +183,11 @@ class BatchExecutionEnv:
             "is_bps": ep.side * (price - self.m0) * q / notional0 * 1e4,
             # Mark-to-market split of the same IS: child cost vs the current mid + inventory x mid change.
             # Summed over an episode the two are equal (telescoping); this one assigns credit per step.
-            "mtm_bps": ep.side * (q * (price - m) + remaining * (m - self.m_prev)) / notional0 * 1e4,
+            # price_drift = expected drops the inventory term (self.drift = 0): its martingale mean is 0.
+            "mtm_bps": ep.side
+            * (q * (price - m) + self.drift * remaining * (m - self.m_prev))
+            / notional0
+            * 1e4,
             "fees_bps": self.fees(q * price, ep.side, q > 0) / notional0 * 1e4,
             "risk_bps": self.risk_aversion * (sigma * 1e4) ** 2 * (left / ep.qty) ** 2,
         }

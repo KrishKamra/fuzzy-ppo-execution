@@ -132,6 +132,9 @@ def train_ppo(
     policy: str = typer.Option("", help="mlp | fuzzy (default: the config's policy)."),
     evolve: bool = typer.Option(True, help="Fuzzy only: structure evolution (off = static ANFIS)."),
     antecedent_grad: str = typer.Option("", help="Fuzzy only: all | value_only | none (default: efnn.yaml)."),
+    price_drift: str = typer.Option("", help="Reward: realised | expected (default: env.yaml)."),
+    gate: str = typer.Option("", help="Fuzzy only: soft | hard (k-means gate ablation; no evolution)."),
+    hold_out: str = typer.Option("", help="Leave this security out of training (and of the scaler)."),
 ) -> None:
     """Train PPO (MLP, static fuzzy or eFNN) on the train split; best.pt is picked by val objective."""
     from hftf_data.paths import REPO_ROOT
@@ -150,8 +153,18 @@ def train_ppo(
     efnn.evolution.enabled = evolve
     if antecedent_grad:
         efnn.antecedent_grad = antecedent_grad
+    if gate:
+        efnn.gate = gate
     env_cfg = EnvConfig.load()
-    market = MarketData.load(env_cfg.features_path)
+    if price_drift:
+        env_cfg.reward.price_drift = price_drift
+    keep = None
+    if hold_out:
+        names = MarketData.load(env_cfg.features_path).sessions["security"].unique().tolist()
+        if hold_out not in names:
+            raise typer.BadParameter(f"{hold_out!r} is not one of {names}")
+        keep = [n for n in names if n != hold_out]
+    market = MarketData.load(env_cfg.features_path, securities=keep)
     trainer = PPOTrainer(cfg, env_cfg, market, REPO_ROOT / "runs" / run, efnn=efnn)
     best = trainer.train(log=console.print)
     console.print(
@@ -209,7 +222,9 @@ def eval_rules(
     from rich.table import Table
 
     from hftf_eval.backtest import sample_episodes
-    from hftf_rl.interpret import rule_report
+    from hftf_eval.report import LABEL, eval_labels
+    from hftf_eval.stats import adjusted_mutual_info
+    from hftf_rl.interpret import dominant_rules, rule_report
     from hftf_rl.ppo import load_policy
     from hftf_sim import MarketData
 
@@ -217,7 +232,13 @@ def eval_rules(
     if ckpt["policy"] != "fuzzy":
         raise typer.BadParameter("not a fuzzy checkpoint")
     market = MarketData.load(cfg.features_path)
-    rows = rule_report(policy, market, cfg, sample_episodes(market, cfg, split, episodes, seed))
+    ep = sample_episodes(market, cfg, split, episodes, seed)
+    rows = rule_report(policy, market, cfg, ep)
+    rule, session = dominant_rules(policy, market, cfg, ep)
+    label = market.sessions.merge(eval_labels(cfg.features_path), on=["security", "date"], how="left")[LABEL]
+    label = label.to_numpy()[session]
+    known = label == label  # drop sessions without a previous-day label (NaN)
+    ami = adjusted_mutual_info(rule[known], label[known])
     table = Table(title=f"{checkpoint}: {len(rows)} rules, firing on {split} ({episodes:,} episodes)")
     for col in ("rule", "IF imbalance", "spread-var", "RV", "THEN pace", "share"):
         table.add_column(col, justify="right" if col in ("rule", "THEN pace", "share") else "left")
@@ -234,7 +255,124 @@ def eval_rules(
     console.print(
         "Centres in train-standardised units; terms from train terciles. Imbalance is signed by side."
     )
+    console.print(f"AMI(dominant rule, {LABEL}) = {ami:.3f} over {known.sum():,} decisions")
 
 
 if __name__ == "__main__":
     app()
+
+
+def _load_groups(groups: list[str], members: bool):
+    """`NAME=GLOB` arguments -> policies: each group's seed ensemble (named NAME) and, optionally, every
+    member alone (named after its run directory)."""
+    import glob
+    from pathlib import Path
+
+    from hftf_data.paths import REPO_ROOT
+    from hftf_rl.ppo import EnsemblePolicy, load_policy
+
+    policies, cfg, stats = [], None, None
+    for g in groups:
+        name, _, pattern = g.partition("=")
+        paths = sorted(glob.glob(str(REPO_ROOT / pattern)))
+        if not name or not paths:
+            raise typer.BadParameter(f"{g!r}: expected NAME=GLOB matching at least one checkpoint")
+        loaded = [load_policy(p, name=Path(p).parent.name) for p in paths]
+        cfg = cfg or loaded[0][1]
+        for _, _, ckpt in loaded:  # every policy must see observations scaled as in its training
+            s = ckpt.get("market_stats")
+            if stats is not None and s is not None and s != stats:
+                raise typer.BadParameter("checkpoints were trained with different observation scalers")
+            stats = stats or s
+        policies.append(EnsemblePolicy([p for p, _, _ in loaded], name))
+        if members:
+            policies += [p for p, _, _ in loaded]
+    return policies, cfg, stats
+
+
+def _print_stats(table, title: str) -> None:
+    from rich.table import Table
+
+    ref = table["reference"].iloc[0]
+    t = Table(title=f"{title}: policy - {ref} (bps), 95% CI over {table['sessions'].iloc[0]} sessions")
+    for col in ("policy", "diff", "CI", "Wilcoxon p", "win"):
+        t.add_column(col, justify="left" if col == "policy" else "right", no_wrap=True)
+    for _, r in table.iterrows():
+        t.add_row(
+            r["policy"], f"{r['mean']:+.3f}", f"({r['lo']:+.3f}, {r['hi']:+.3f})",
+            f"{r['wilcoxon_p']:.3f}", f"{r['win']:.0%}",
+        )  # fmt: skip
+    console.print(t)
+
+
+@eval_app.command("compare")
+def eval_compare(
+    groups: list[str] = typer.Argument(
+        ..., help="NAME=GLOB of checkpoints, e.g. mlp=runs/m4_mlp_s*/best.pt."
+    ),
+    split: str = typer.Option("val", help="train | val | test"),
+    episodes: int = typer.Option(4000, help="Parent orders, shared by every policy (paired)."),
+    seed: int = typer.Option(1, help="Episode seed (not the trainer's selection seed)."),
+    members: bool = typer.Option(True, help="Also evaluate every seed alone, not only the seed ensemble."),
+    vs: str = typer.Option("", help="Also compare every group's ensemble against this group's ensemble."),
+    by_regime: bool = typer.Option(False, help="Break the ensembles down by the eval-only regime label."),
+    out: str = typer.Option("", help="Write the backtest rows and tables to runs/reports/<out>_*.csv."),
+    security: str = typer.Option("", help="Only this security (e.g. the held-out one of a LOSO run)."),
+) -> None:
+    """Seed ensembles (and seeds) vs VWAP on fresh paired episodes, with session-cluster bootstrap CIs."""
+    from hftf_data.paths import REPO_ROOT
+    from hftf_eval.report import backtest, eval_labels, regime_table, stats_table
+    from hftf_sim import MarketData
+
+    policies, cfg, stats = _load_groups(groups, members)
+    market = MarketData.load(cfg.features_path, securities=[security] if security else None, stats=stats)
+    df = backtest(policies, market, cfg, split, episodes, seed, eval_labels(cfg.features_path))
+    names = [p.name for p in policies]
+    ensembles = [g.partition("=")[0] for g in groups]
+    tables = {"vs_vwap": stats_table(df, names)}
+    if vs:
+        tables["vs_group"] = stats_table(df, [e for e in ensembles if e != vs], reference=vs)
+    for table in tables.values():
+        _print_stats(table, f"{split}, {episodes:,} episodes")
+    if by_regime:
+        tables["regime"] = regime_table(df, ensembles)
+        console.print(
+            tables["regime"][["policy", "regime_eval_prevday", "episodes", "mean", "lo", "hi"]].round(3)
+        )
+    if out:
+        base = REPO_ROOT / "runs" / "reports"
+        base.mkdir(parents=True, exist_ok=True)
+        df.to_csv(base / f"{out}_rows.csv", index=False)
+        for key, table in tables.items():
+            table.to_csv(base / f"{out}_{key}.csv", index=False)
+        console.print(f"wrote {base / out}_*.csv")
+
+
+@eval_app.command("robustness")
+def eval_robustness(
+    groups: list[str] = typer.Argument(..., help="NAME=GLOB of checkpoints (evaluated as seed ensembles)."),
+    param: str = typer.Option("eta", help="Impact parameter to sweep: eta | gamma | beta | tau_res_min."),
+    values: str = typer.Option(
+        "0.25,0.5,1,2,4", help="Comma-separated values (training range is in env.yaml)."
+    ),
+    split: str = typer.Option("val", help="train | val | test"),
+    episodes: int = typer.Option(4000, help="Parent orders per setting."),
+    seed: int = typer.Option(1, help="Episode seed."),
+    out: str = typer.Option("", help="Write runs/reports/<out>.csv."),
+    vs: str = typer.Option("", help="Also compare every group against this group."),
+) -> None:
+    """Ensembles vs VWAP as one impact parameter moves inside and outside the training range."""
+    from hftf_data.paths import REPO_ROOT
+    from hftf_eval.report import impact_sweep
+    from hftf_sim import MarketData
+
+    policies, cfg, stats = _load_groups(groups, members=False)
+    market = MarketData.load(cfg.features_path, stats=stats)
+    grid = [float(v) for v in values.split(",")]
+    table = impact_sweep(policies, market, cfg, split, episodes, seed, param, grid, vs=vs or None)
+    console.print(f"training range of {param}: {cfg.impact.randomise.get(param, 'fixed')}")
+    cols = [param, "policy", "reference", "vwap_cost", "mean", "lo", "hi", "wilcoxon_p"]
+    console.print(table[cols].round(3).to_string(index=False))
+    if out:
+        (REPO_ROOT / "runs" / "reports").mkdir(parents=True, exist_ok=True)
+        table.to_csv(REPO_ROOT / "runs" / "reports" / f"{out}.csv", index=False)

@@ -118,7 +118,7 @@ def test_mark_to_market_reward_sums_to_arrival_is():
     rewards = {}
     for mode in ("arrival", "mark_to_market"):
         cfg, mk = EnvConfig.load(), market()
-        cfg.reward.mode = mode
+        cfg.reward.mode, cfg.reward.price_drift = mode, "realised"
         env = BatchExecutionEnv(mk, cfg, n_envs=8, autoreset=False, randomise_impact=False)
         env.reset(episodes(8, horizon=60, qty=4000.0, row0=50))
         rng, total = np.random.default_rng(6), np.zeros(8)
@@ -134,7 +134,7 @@ def test_vs_vwap_reward_is_cost_relative_to_a_separate_vwap_run():
     ep = episodes(8, horizon=60, qty=4000.0, row0=50)
     costs = {}
     for name, act in (("vwap", lambda rng: np.ones(8)), ("agent", lambda rng: rng.uniform(0, 3, size=8))):
-        cfg.reward.mode = "vs_vwap"
+        cfg.reward.mode, cfg.reward.price_drift = "vs_vwap", "realised"
         env = BatchExecutionEnv(mk, cfg, n_envs=8, autoreset=False, randomise_impact=True)
         env.reset(ep)
         rng, total = np.random.default_rng(7), np.zeros(8)
@@ -143,3 +143,39 @@ def test_vs_vwap_reward_is_cost_relative_to_a_separate_vwap_run():
         costs[name] = (env.summary()["cost_bps"], total)
     np.testing.assert_allclose(costs["vwap"][1], 0.0, atol=1e-9)  # VWAP against itself
     np.testing.assert_allclose(costs["agent"][1], costs["vwap"][0] - costs["agent"][0], rtol=1e-9, atol=1e-9)
+
+
+def test_expected_price_drift_reward_ignores_the_mid_path():
+    """With price_drift = expected the return depends only on execution costs: tilting the mid path after
+    arrival changes the realised IS but barely moves the reward (only via the price level of the costs)."""
+    cfg, ep = EnvConfig.load(), episodes(8, horizon=60, qty=4000.0, row0=50)
+    cfg.reward.mode, cfg.reward.price_drift = "mark_to_market", "expected"
+    returns, is_bps = [], []
+    for tilt in (0.0, 1e-4):
+        mk = market()
+        mk.mid = mk.mid.copy()
+        mk.mid[:, 51:] *= 1.0 + tilt * np.arange(1, mk.mid.shape[1] - 50)
+        env = BatchExecutionEnv(mk, cfg, n_envs=8, autoreset=False, randomise_impact=False)
+        env.reset(ep)
+        total = np.zeros(8)
+        while not env.done.all():
+            total += env.step(np.full(8, 1.5))[1]
+        returns.append(total)
+        is_bps.append(env.summary()["is_bps"])
+    assert np.abs(is_bps[1] - is_bps[0]).min() > 1.0
+    np.testing.assert_allclose(returns[0], returns[1], rtol=1e-2)
+    with pytest.raises(ValueError):
+        cfg.reward.mode = "arrival"
+        BatchExecutionEnv(market(), cfg, n_envs=2)
+
+
+@pytest.mark.skipif(not FEATURES.exists(), reason="licensed feature table not present")
+def test_leave_one_stock_out_market_fits_the_scaler_on_the_kept_names_only():
+    cfg = EnvConfig.load()
+    full = MarketData.load(cfg.features_path)
+    names = list(full.sessions["security"].unique())
+    train = MarketData.load(cfg.features_path, securities=names[1:])
+    assert set(train.sessions["security"]) == set(names[1:])
+    assert train.stats != full.stats
+    held = MarketData.load(cfg.features_path, securities=names[:1], stats=train.stats)
+    assert held.stats == train.stats and set(held.sessions["security"]) == {names[0]}

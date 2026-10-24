@@ -10,7 +10,9 @@ Read `project_context.md` first (domain, data dictionary, invariants). The bindi
 - `uv run hftf data audit [--strict]`: readiness gate R01-R12 over the raw pull and the feature table (`docs/DATA_READINESS.md`)
 - `uv run hftf eval baselines [--split val] [--randomise-impact]`: paired baseline backtest in `hftf-sim`
 - `uv run hftf train ppo --run NAME [--seed N]` → `runs/NAME/`; `uv run hftf eval policy runs/NAME/best.pt --split val`
-- `--policy fuzzy [--no-evolve] [--antecedent-grad value_only]` trains eFNN / ANFIS; `uv run hftf eval rules CKPT` gives the rule report
+- `--policy fuzzy [--no-evolve] [--antecedent-grad value_only] [--gate hard]` trains eFNN / ANFIS / ablations; `--hold-out SEC` leaves a stock out; `uv run hftf eval rules CKPT` gives the rule report and rule-regime AMI
+- `uv run hftf eval compare mlp='runs/m4_mlp_s*/best.pt' efnn='runs/m4_efnn_s*/best.pt' --vs mlp [--by-regime] [--security SEC]`: seed ensembles, session-cluster CIs; `hftf eval robustness ... --param eta` sweeps impact
+- Training reward is the expected-drift Almgren-Chriss cost (`env.yaml reward.price_drift: expected`); evaluation always charges realised IS
 - Results go in `docs/RESULTS.md` (fresh paired episodes, all seeds; never the selection set)
 - Every imputation/transformation is logged in `docs/DATA_TRANSFORMS.md`: update it with any change to `hftf_data`
 

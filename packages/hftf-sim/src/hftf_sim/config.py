@@ -42,6 +42,10 @@ class RewardConfig(BaseModel):
     # inventory P&L (same episode return). vs_vwap: mark_to_market minus a shadow adaptive VWAP on the same
     # path (return shifted by an action-independent amount). See ARCHITECTURE §4.6.
     mode: Literal["arrival", "mark_to_market", "vs_vwap"] = "vs_vwap"
+    # realised: charge the inventory × mid-move term of the mark-to-market split. expected: replace it by its
+    # martingale expectation, 0, so the reward is expected cost + risk penalty (Almgren-Chriss). Needs
+    # mark_to_market or vs_vwap. Evaluation always reports the realised IS. See ARCHITECTURE §4.6.
+    price_drift: Literal["realised", "expected"] = "realised"
 
 
 class EnvConfig(BaseModel):

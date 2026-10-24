@@ -10,8 +10,9 @@ losses, including the Bellman value loss, also train the fuzzy membership functi
 > **Status:** M0 (workspace, data audit, final feature table `features_1m_v3`, readiness gate READY 12/12)
 > M1 (batched execution simulator `hftf-sim`; immediate/TWAP/VWAP/POV/Almgren-Chriss baselines in
 > `hftf-eval`) and M2 (PPO-MLP, which beats VWAP by about 0.2 bps; [docs/RESULTS.md](docs/RESULTS.md)) are complete.
-> M3 (static ANFIS and evolving fuzzy layer, with KL-guarded add/merge/prune) is complete too. Next is M4: experiments
-> and the report. Val gains are not yet reliable (see RESULTS).
+> M3 (static ANFIS and evolving fuzzy layer, with KL-guarded add/merge/prune) and M4 (experiments, ablations,
+> robustness, leave-one-stock-out and the final test-split evaluation) are complete: see
+> [docs/RESULTS.md](docs/RESULTS.md).
 > See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#9-milestones).
 
 ## Quick start
@@ -29,6 +30,8 @@ uv run hftf train ppo --run ppo_mlp_s0   # PPO-MLP, ~2 min on CPU -> runs/ppo_ml
 uv run hftf eval policy runs/ppo_mlp_s0/best.pt --split val   # vs baselines, paired difference to VWAP
 uv run hftf train ppo --run efnn_s0 --policy fuzzy   # eFNN (add --no-evolve for static ANFIS)
 uv run hftf eval rules runs/efnn_s0/best.pt   # IF imbalance/spread-var/RV THEN pace, with firing shares
+uv run hftf eval compare mlp='runs/m4_mlp_s*/best.pt' efnn='runs/m4_efnn_s*/best.pt' --vs mlp   # seed ensembles
+uv run hftf eval robustness mlp='runs/m4_mlp_s*/best.pt' efnn='runs/m4_efnn_s*/best.pt' --param eta --vs mlp
 ```
 
 The raw data is expected at `data/is2/bbg_data/`. Override that with `HFTF_RAW_DIR`. It is licensed

@@ -97,3 +97,20 @@ def test_fuzzy_trainer_logs_events_and_checkpoint_keeps_the_evolved_structure(tm
     assert policy.name == "ppo_efnn"
     assert policy.model.fuzzy.n_rules == ckpt["arch"]["n_rules"] == trainer.model.fuzzy.n_rules
     assert policy.obs_rms.passthrough == 3
+
+
+def test_hard_gate_uses_one_rule_per_decision():
+    from hftf_rl.policies import FuzzyActorCritic
+
+    obs = torch.as_tensor(np.random.default_rng(3).normal(size=(64, 15)).astype(np.float32))
+    model = FuzzyActorCritic(15, [64, 64], 4.0, n_rules=3, gate="hard")
+    with torch.no_grad():
+        model.fuzzy.centres.normal_()
+        model.fuzzy.actor_b.normal_()
+    dist, _ = model(obs)
+    h, x = model.trunk(obs), model.regime(obs)
+    best = model.fuzzy.phi(x).argmax(-1)
+    own = model.fuzzy.consequents("actor", h)[torch.arange(64), best]
+    expected = 1.0 + torch.nn.functional.softplus(own)
+    torch.testing.assert_close(dist.concentration1, expected[:, 0])
+    assert torch.autograd.grad(dist.mean.sum(), model.fuzzy.centres, allow_unused=True)[0] is None

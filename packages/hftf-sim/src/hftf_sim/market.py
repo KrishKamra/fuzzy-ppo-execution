@@ -46,12 +46,24 @@ class MarketData:
     stats: dict[str, tuple[float, float]]
 
     @classmethod
-    def load(cls, path: str | Path | None = None) -> MarketData:
+    def load(
+        cls,
+        path: str | Path | None = None,
+        securities: list[str] | None = None,
+        stats: dict[str, tuple[float, float]] | None = None,
+    ) -> MarketData:
+        """`securities` keeps only those names (leave-one-stock-out); `stats` reuses a training scaler, else
+        it is fitted on the train split of the names kept."""
         path = REPO_ROOT / "data/processed/features_1m_v3.parquet" if path is None else Path(path)
         if not path.is_absolute():
             path = REPO_ROOT / path
         cols = ["security", "date", "mso", "split", *REGIME_COLUMNS, *MARKET_COLUMNS, *FILL_COLUMNS]
-        return cls.from_frame(pd.read_parquet(path, columns=list(dict.fromkeys(cols))))
+        df = pd.read_parquet(path, columns=list(dict.fromkeys(cols)))
+        if securities is not None:
+            df = df[df["security"].isin(securities)]
+            if df.empty:
+                raise ValueError(f"no rows for securities {securities}")
+        return cls.from_frame(df, stats=stats)
 
     @classmethod
     def from_frame(cls, df: pd.DataFrame, stats: dict[str, tuple[float, float]] | None = None) -> MarketData:

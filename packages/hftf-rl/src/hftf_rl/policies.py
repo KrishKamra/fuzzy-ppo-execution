@@ -114,6 +114,9 @@ class FuzzyActorCritic(_PaceActorCritic):
     loss does: φ is detached in the actor head) or `none` (φ detached everywhere; MFs move only by evolution).
     Every rule starts with the same consequents, so the initial policy is the MLP's noisy VWAP whatever the
     antecedents are, and re-placing them (k-means) is function-preserving.
+
+    `gate = hard` is the ablation without fuzziness: φ is the one-hot of the most strongly firing rule (a
+    k-means-style partition), so no gradient reaches the antecedents; use it with evolution off.
     """
 
     kind = "fuzzy"
@@ -130,10 +133,13 @@ class FuzzyActorCritic(_PaceActorCritic):
         regime_dim: int = 3,
         antecedent_grad: str = "all",
         width: float = 1.0,
+        gate: str = "soft",
     ) -> None:
         super().__init__()
         if antecedent_grad not in ("all", "value_only", "none"):
             raise ValueError(f"antecedent_grad must be all | value_only | none, got {antecedent_grad!r}")
+        if gate not in ("soft", "hard"):
+            raise ValueError(f"gate must be soft | hard, got {gate!r}")
         self._arch = {
             "obs_dim": obs_dim,
             "hidden": list(hidden),
@@ -144,8 +150,10 @@ class FuzzyActorCritic(_PaceActorCritic):
             "regime_dim": regime_dim,
             "antecedent_grad": antecedent_grad,
             "width": width,
+            "gate": gate,
         }
         self.a_max, self.regime_dim, self.antecedent_grad = a_max, regime_dim, antecedent_grad
+        self.gate = gate
         self.trunk, n_in = _trunk(obs_dim, hidden, activation)
         self.fuzzy = FuzzyTSK(regime_dim, n_rules, {"actor": 2, "critic": 1}, n_in, width)
         actor, critic = _layer(n_in, 2, 0.01), _layer(n_in, 1, 1.0)
@@ -164,6 +172,8 @@ class FuzzyActorCritic(_PaceActorCritic):
     def forward(self, obs: torch.Tensor) -> tuple[Beta, torch.Tensor]:
         h = self.trunk(obs)
         phi = self.fuzzy.phi(self.regime(obs))
+        if self.gate == "hard":
+            phi = nn.functional.one_hot(phi.argmax(-1), phi.shape[-1]).to(phi.dtype)
         phi_actor = phi if self.antecedent_grad == "all" else phi.detach()
         phi_critic = phi.detach() if self.antecedent_grad == "none" else phi
         ab = 1.0 + nn.functional.softplus(self.fuzzy.head("actor", h, phi_actor))

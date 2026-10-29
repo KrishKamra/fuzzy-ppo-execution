@@ -99,7 +99,7 @@ charts carry a text summary; reduced motion respected; colour never the only sig
 | **M6c** ✅ | `web/` scaffold, tokens and themes, shell (top bar, routing, palette), typed API client | Lighthouse ≥ 95 (performance, accessibility) on the shell |
 | **M6d** ✅ | Execute screen: ticket, price/inventory/cost charts, transport dock, leaderboard | a real val order replays end to end, all panels in sync |
 | **M6e** ✅ | Fuzzy brain rail + Brain screen (3D regime space with 2D fallback) | rule text equals `hftf eval rules`; the 3D chunk loads only on that screen |
-| **M6f** | Evidence and Training screens, hero, presentation mode, demo script, README | a 3-minute scripted demo runs from a clean checkout plus local `data/` and `runs/` |
+| **M6f** ✅ | Evidence and Training screens, hero, presentation mode, demo script, README | a 3-minute scripted demo runs from a clean checkout plus local `data/` and `runs/` |
 
 **M6c as built:** `web/` (see `web/README.md`). Tokens in `src/styles/index.css` (Tailwind 4 `@theme`); the data
 palette in `src/lib/palette.ts`, validated with the dataviz skill on our surfaces (dark: all checks pass,
@@ -138,6 +138,15 @@ Bundles (gzip): shell 131 KB; Execute 171 KB (ECharts); Brain 3 KB + RegimeSpace
 loaded only on its screen. Lighthouse desktop: Overview 100/100/100, Execute 98/100/100, Brain 95/100/100
 (TBT 150 ms under software WebGL in headless Edge). Brand: `web/public/custom.svg` (logo and favicon: three
 membership functions with the agent's state) and `docs/assets/hero.svg` (the README banner).
+
+**M6f as built:** the Evidence screen (claims checklist with status icons; SVG forest plots with session and date CIs
+and Holm p; our run beside the replication; BarSim vs TickSim; limit orders; robustness sweeps; by regime) and the
+Training screen (validation edge with the selected checkpoint, rule-base events, PPO and edit KL against the 0.02
+guard), both lazy. Confidence bands on numeric axes are custom polygon series (`components/charts/bands.ts`):
+stacking two lines only works on category axes, which the first render exposed. Every number comes from the API's
+report tables (`configs/demo.yaml`); the replication's values, whose rows are not kept, come from RESULTS.md.
+Lighthouse desktop: Evidence 99/100/100, Training 99/100/100. `hftf report figures` writes the same evidence as
+slide figures (`docs/figures/`), and `docs/DEMO_SCRIPT.md` is the 3-minute walkthrough.
 
 **Stretch (after M6f):** to animate the rule base *growing during training* in 3D, the trainer would also need
 to save rule snapshots (centres, widths) at each structure edit. Today `events.csv` records which rules

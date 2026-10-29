@@ -22,3 +22,13 @@ export function useRules(policy: string | null | undefined, enabled = true) {
     retry: false,
   });
 }
+
+/** The report tables configured in configs/demo.yaml (statistics only; regenerated offline). */
+export function useResults() {
+  return useQuery({ queryKey: ["results"], queryFn: api.results, staleTime: Infinity, retry: 1 });
+}
+
+/** One training run's curves and structure events. */
+export function useRun(name: string | null | undefined) {
+  return useQuery({ queryKey: ["run", name], queryFn: () => api.run(name as string), enabled: !!name, staleTime: Infinity });
+}

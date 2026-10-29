@@ -1,5 +1,8 @@
 # Results log
 
+> Slide-ready figures of these results (SVG/PNG, with captions and sources) are in [figures/](figures/README.md);
+> regenerate them with `uv run hftf report figures`.
+
 Results as they are produced, with the commands that regenerate them. Costs are in **bps of arrival
 notional** (higher is worse). All comparisons are **paired**: every policy runs on identical episodes with
 identical impact. The test split was used once, at the end of M4, after every choice was fixed.

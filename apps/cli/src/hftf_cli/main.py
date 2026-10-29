@@ -588,5 +588,26 @@ def openapi(
     console.print(f"wrote {path}")
 
 
+report_app = typer.Typer(no_args_is_help=True, help="Report and slide material from the saved results.")
+app.add_typer(report_app, name="report")
+
+
+@report_app.command("figures")
+def report_figures(
+    out: str = typer.Option("docs/figures", help="Output folder (SVG + PNG + README.md)."),
+    training_run: str = typer.Option(
+        "m4_efnn_s0", help="Run whose training curves and rule events are drawn."
+    ),
+) -> None:
+    """Render report/slide figures from runs/reports/*.csv and one training run (needs matplotlib, dev)."""
+    from hftf_data.paths import REPO_ROOT
+    from hftf_eval.figures import write_figures
+
+    done = write_figures(REPO_ROOT / out, REPO_ROOT / "runs" / "reports", REPO_ROOT / "runs", training_run)
+    for meta, files in done:
+        console.print(f"{meta.name:16s} {', '.join(f.name for f in files)}")
+    console.print(f"wrote {len(done)} figures and {out}/README.md")
+
+
 if __name__ == "__main__":
     app()

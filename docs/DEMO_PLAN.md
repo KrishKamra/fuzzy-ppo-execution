@@ -1,6 +1,6 @@
 # M6 plan: demo backend and frontend
 
-Status: **M6a-M6b built** (2026-10-29); the frontend is specified in [UI_DESIGN.md](UI_DESIGN.md). This is the plan for the course demo: a local web app that shows the
+Status: **built** (M6a-M6f, 2026-10-30); the frontend design is in [UI_DESIGN.md](UI_DESIGN.md) and the walkthrough in [DEMO_SCRIPT.md](DEMO_SCRIPT.md). This is the plan for the course demo: a local web app that shows the
 system working on a real parent order, from the order ticket through the eFNN's regime reasoning to the fills
 and the cost against VWAP. Design decisions made while building go in `ARCHITECTURE.md` (decision log), as
 for M0-M5.
@@ -102,7 +102,7 @@ report tables (Holm, date clusters) from saved backtest rows without simulating.
 | **M6c** ✅ | `web/` scaffold: design tokens and themes, shell, routing, command palette, typed API client | Lighthouse ≥ 95 on the shell (measured: 100 / 100 / 100) |
 | **M6d** ✅ | Execute screen: order ticket, price / inventory / cost-race charts, transport dock, leaderboard | one real val order replays end to end, all panels in sync |
 | **M6e** ✅ | fuzzy brain rail + Brain screen (3D regime space, 2D fallback) | rule text matches `hftf eval rules`; the 3D chunk loads only on that screen |
-| **M6f** | Evidence and Training screens, hero, presentation mode, demo script, README | a 3-minute scripted demo runs from a clean checkout plus local `data/` and `runs/` |
+| **M6f** ✅ | Evidence and Training screens, hero, presentation mode, demo script, README | a 3-minute scripted demo runs from a clean checkout plus local `data/` and `runs/` |
 
 The frontend milestones follow [UI_DESIGN.md](UI_DESIGN.md) §5 (the single source for M6c-M6f).
 Suggested split for three people: one owns M6a-M6b (Python), one owns M6d and M6f (replay and results),

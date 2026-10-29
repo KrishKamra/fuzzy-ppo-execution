@@ -79,7 +79,7 @@ test("the palette navigates and closes", async () => {
   await user.click(screen.getByRole("button", { name: /Search/ }));
   const dialog = await screen.findByRole("dialog");
   await user.click(within(dialog).getByText("Evidence"));
-  expect(router.state.location.pathname).toBe("/evidence");
+  await waitFor(() => expect(router.state.location.pathname).toBe("/evidence")); // a lazy route
   await waitFor(() => expect(screen.queryByPlaceholderText(/Go to a screen/)).not.toBeInTheDocument());
 });
 

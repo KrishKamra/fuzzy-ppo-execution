@@ -387,7 +387,7 @@ available on every bar day.
 | M3: static fuzzy → evolving fuzzy (edits logged, KL-guarded; docs/RESULTS.md) | **done** |
 | M4: experiments, ablations, robustness, report (expected-drift reward, seed ensembles, session-cluster stats; docs/RESULTS.md) | **done** |
 | M5: TickSim and limit orders (dead zone, passive head started at the naive rule), evaluated on val tick sessions (docs/RESULTS.md M5 parts 1-4): learned limit orders beat the naive always-passive rule by 0.43-0.46 bps with a lighter tail. Full-universe data dropped: pull frozen | **done** |
-| M6: demo backend + frontend (docs/DEMO_PLAN.md) | planned |
+| M6: demo backend + frontend (docs/DEMO_PLAN.md, docs/UI_DESIGN.md, docs/DEMO_SCRIPT.md); figures in docs/figures/ | **done** |
 
 **Data readiness:** `uv run hftf data build-features && uv run hftf data audit --strict` gives pass/fail
 against `docs/DATA_READINESS.md`: **READY, 12/12**. Every transformation is logged in `docs/DATA_TRANSFORMS.md`.

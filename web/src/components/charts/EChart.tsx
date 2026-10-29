@@ -3,14 +3,14 @@
  * lines/areas); the canvas renderer stays smooth while a replay updates every frame. Charts sharing a `group`
  * get linked crosshairs and tooltips.
  */
-import { LineChart, ScatterChart } from "echarts/charts";
-import { GridComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent } from "echarts/components";
+import { CustomChart, LineChart, ScatterChart } from "echarts/charts";
+import { GridComponent, LegendComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent } from "echarts/components";
 import * as echarts from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import type { EChartsCoreOption } from "echarts/core";
 import { useEffect, useRef } from "react";
 
-echarts.use([LineChart, ScatterChart, GridComponent, TooltipComponent, MarkLineComponent, MarkAreaComponent, CanvasRenderer]);
+echarts.use([LineChart, ScatterChart, CustomChart, GridComponent, LegendComponent, TooltipComponent, MarkLineComponent, MarkAreaComponent, CanvasRenderer]);
 
 export type ChartOption = EChartsCoreOption;
 

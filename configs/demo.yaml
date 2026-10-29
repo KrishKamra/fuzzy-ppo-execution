@@ -20,12 +20,15 @@ policies:
   - {name: mlp_limit, label: "PPO-MLP + limit orders (3 seeds)", glob: "runs/m5_lip_mlp_s*/best.pt",
      description: "Learned limit orders, neural network"}
 runs: [m4_efnn_s0, m4_efnn_s1, m4_mlp_s0, m5_lip_efnn_s0]   # training curves and structure events
-results:   # report tables (runs/reports/, regenerate with `hftf eval restat`)
+results:   # report tables (runs/reports/, from `hftf eval compare --out` / `hftf eval restat`); ids are used by the UI
   - {id: test_vs_vwap, title: "Test split: ensembles and seeds vs VWAP", file: runs/reports/final_test_vs_vwap.csv}
   - {id: test_vs_mlp, title: "Test split: architectures vs MLP", file: runs/reports/final_test_vs_group.csv}
   - {id: test_by_regime, title: "Test split by previous-day volatility", file: runs/reports/final_test_regime.csv}
   - {id: val_vs_vwap, title: "Validation split vs VWAP", file: runs/reports/main_val_vs_vwap.csv}
+  - {id: bar_vs_vwap, title: "BarSim (val tick sessions) vs VWAP", file: runs/reports/m5_val_bar_vs_vwap.csv}
   - {id: tick_vs_vwap, title: "TickSim (val tick sessions) vs VWAP", file: runs/reports/m5_val_tick_vs_vwap.csv}
+  - {id: limit_vs_vwap, title: "Limit orders (TickSim) vs VWAP", file: runs/reports/m5_lip_val_ticksim_vs_vwap.csv}
+  - {id: limit_vs_passive, title: "Limit orders (TickSim) vs always-passive VWAP", file: runs/reports/m5_lip_val_ticksim_vs_group.csv}
   - {id: robust_gamma, title: "Robustness: transient impact strength", file: runs/reports/robust_gamma.csv}
   - {id: robust_tau, title: "Robustness: impact resilience time", file: runs/reports/robust_tau_res_min.csv}
   - {id: robust_eta, title: "Robustness: temporary impact", file: runs/reports/robust_eta.csv}

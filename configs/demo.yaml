@@ -1,0 +1,31 @@
+# Demo backend (apps/api, docs/DEMO_PLAN.md): which trained policies and report tables the UI offers.
+# Checkpoints live under the git-ignored runs/; a policy whose glob matches nothing is not offered.
+# A glob matching several checkpoints is a seed ensemble (mean action); a single checkpoint of a fuzzy
+# policy also explains itself (rule firing in the replay and /api/policies/<name>/rules).
+splits: [val, test]          # the UI starts on val; test sessions are labelled as out-of-sample showcase
+default_policies: [efnn_s0, mlp, vwap]
+policies:
+  - {name: efnn_s0, label: "PPO-eFNN (seed 0)", glob: "runs/m4_efnn_s0/best.pt",
+     description: "Evolving fuzzy policy; its rules explain each decision"}
+  - {name: efnn, label: "PPO-eFNN (5-seed ensemble)", glob: "runs/m4_efnn_s*/best.pt",
+     description: "Mean pace of five eFNN seeds"}
+  - {name: anfis, label: "PPO-ANFIS (5-seed ensemble)", glob: "runs/m4_anfis_s*/best.pt",
+     description: "Static fuzzy rules (no evolution)"}
+  - {name: mlp, label: "PPO-MLP (5-seed ensemble)", glob: "runs/m4_mlp_s*/best.pt",
+     description: "Same PPO with a plain neural network"}
+  - {name: efnn_limit_s0, label: "PPO-eFNN + limit orders (seed 0)", glob: "runs/m5_lip_efnn_s0/best.pt",
+     description: "Pace and passive fraction; rules explain both"}
+  - {name: efnn_limit, label: "PPO-eFNN + limit orders (3 seeds)", glob: "runs/m5_lip_efnn_s*/best.pt",
+     description: "Learned limit orders, ensemble"}
+  - {name: mlp_limit, label: "PPO-MLP + limit orders (3 seeds)", glob: "runs/m5_lip_mlp_s*/best.pt",
+     description: "Learned limit orders, neural network"}
+runs: [m4_efnn_s0, m4_efnn_s1, m4_mlp_s0, m5_lip_efnn_s0]   # training curves and structure events
+results:   # report tables (runs/reports/, regenerate with `hftf eval restat`)
+  - {id: test_vs_vwap, title: "Test split: ensembles and seeds vs VWAP", file: runs/reports/final_test_vs_vwap.csv}
+  - {id: test_vs_mlp, title: "Test split: architectures vs MLP", file: runs/reports/final_test_vs_group.csv}
+  - {id: test_by_regime, title: "Test split by previous-day volatility", file: runs/reports/final_test_regime.csv}
+  - {id: val_vs_vwap, title: "Validation split vs VWAP", file: runs/reports/main_val_vs_vwap.csv}
+  - {id: tick_vs_vwap, title: "TickSim (val tick sessions) vs VWAP", file: runs/reports/m5_val_tick_vs_vwap.csv}
+  - {id: robust_gamma, title: "Robustness: transient impact strength", file: runs/reports/robust_gamma.csv}
+  - {id: robust_tau, title: "Robustness: impact resilience time", file: runs/reports/robust_tau_res_min.csv}
+  - {id: robust_eta, title: "Robustness: temporary impact", file: runs/reports/robust_eta.csv}

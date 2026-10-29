@@ -176,3 +176,22 @@ def test_passive_head_can_start_at_the_naive_always_passive_rule():
         assert (u[:, 1] >= 0.9).mean() > 0.85  # most initial children are a single passive order
     with pytest.raises(ValueError):  # the shared concentration (8) cannot put the mean at 0.95
         MLPActorCritic(15, [64, 64], 4.0, limit=True, init_passive=0.95)
+
+
+def test_fuzzy_policy_explains_its_decisions_in_the_trace():
+    from hftf_eval.trace import run_trace
+    from hftf_rl.policies import FuzzyActorCritic
+    from hftf_rl.ppo import PacePolicy
+    from hftf_sim.episodes import order_episode
+
+    market = MarketData.from_frame(synthetic_frame(n_sessions=2), stats=STATS)
+    cfg = EnvConfig.load()
+    dim = 16  # the env's observation: regime (3) + private (7) + market (5) + next-5-min share
+    fuzzy = FuzzyActorCritic(dim, [64, 64], 4.0, n_rules=4)
+    mlp = MLPActorCritic(dim, [64, 64], 4.0)
+    rms = RunningMeanStd((dim,), passthrough=3)
+    ep = order_episode(market, cfg.episode, 0, "10:00", 30, "buy", 0.05)
+    out = run_trace([PacePolicy(fuzzy, rms, "efnn"), PacePolicy(mlp, rms, "mlp")], market, cfg, ep)
+    phi = np.array(out["policies"][0]["steps"]["phi"])
+    assert phi.shape == (30, 4) and np.allclose(phi.sum(1), 1.0, atol=1e-5)
+    assert "phi" not in out["policies"][1]["steps"]  # an MLP has nothing to explain

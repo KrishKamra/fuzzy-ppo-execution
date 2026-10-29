@@ -75,3 +75,35 @@ class EpisodeSampler:
         side = rng.choice(self.sides, size=n)
         seed = rng.integers(0, 2**31 - 1, size=n)
         return Episodes(session, row0, horizon, side, qty, seed)
+
+
+def order_episode(
+    market: MarketData,
+    cfg: EpisodeConfig,
+    session: int,
+    start: str,
+    horizon: int,
+    side: str,
+    participation: float,
+    seed: int = 0,
+) -> Episodes:
+    """One parent order from an order ticket: decide first at IST clock time `start` (HH:MM) on MarketData
+    session `session`, over `horizon` minutes, with `Q = participation · expected volume over the fill bars`.
+    Validated against the same window as `EpisodeSampler` (decisions from `earliest_start`, done by
+    `latest_end`)."""
+    t0 = _minute(start)
+    if t0 < _minute(cfg.earliest_start) or t0 + horizon > _minute(cfg.latest_end):
+        raise ValueError(f"order {start} + {horizon} min is outside {cfg.earliest_start}-{cfg.latest_end}")
+    if horizon not in cfg.horizons_min:
+        raise ValueError(f"horizon must be one of {cfg.horizons_min}")
+    if side not in ("buy", "sell") or not 0.0 < participation <= 1.0:
+        raise ValueError("side must be buy or sell and participation in (0, 1]")
+    row0 = t0 - 1
+    cp = market.cum_prof
+    expected = cp[session, row0 + horizon + 1] - cp[session, row0 + 1]
+    qty = max(float(np.rint(participation * expected)), 1.0)
+    one = np.ones(1, dtype=np.int64)
+    return Episodes(
+        session * one, row0 * one, horizon * one, (1 if side == "buy" else -1) * one, np.array([qty]),
+        seed * one,
+    )  # fmt: skip

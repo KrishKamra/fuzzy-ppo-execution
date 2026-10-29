@@ -38,6 +38,15 @@ class PacePolicy:
     def __call__(self, env: BatchExecutionEnv) -> np.ndarray:
         return self.model.mean_pace(self.obs_rms.normalize(env.observe()))
 
+    def explain(self, env: BatchExecutionEnv) -> dict[str, np.ndarray] | None:
+        """Normalised rule firing φ (n, R) at the current decision for a fuzzy policy (hftf_eval.trace)."""
+        fuzzy = getattr(self.model, "fuzzy", None)
+        if fuzzy is None:
+            return None
+        obs = torch.as_tensor(self.obs_rms.normalize(env.observe()), dtype=torch.float32)
+        with torch.no_grad():
+            return {"phi": fuzzy.phi(self.model.regime(obs)).numpy()}
+
 
 def evaluate(policy, market: MarketData, env_cfg: EnvConfig, episodes: Episodes) -> dict[str, np.ndarray]:
     """Per-episode costs of a pace policy on a fixed batch at default impact (no hftf-eval dependency)."""

@@ -365,10 +365,6 @@ def eval_rules(
     console.print(f"AMI(dominant rule, {LABEL}) = {ami:.3f} over {known.sum():,} decisions")
 
 
-if __name__ == "__main__":
-    app()
-
-
 def _load_groups(groups: list[str], members: bool):
     """`NAME=GLOB` arguments -> policies: each group's seed ensemble (named NAME) and, optionally, every
     member alone (named after its run directory)."""
@@ -524,3 +520,58 @@ def eval_robustness(
     if out:
         (REPO_ROOT / "runs" / "reports").mkdir(parents=True, exist_ok=True)
         table.to_csv(REPO_ROOT / "runs" / "reports" / f"{out}.csv", index=False)
+
+
+@eval_app.command("restat")
+def eval_restat(
+    rows: str = typer.Argument(
+        ..., help="Backtest rows written by `eval compare --out`, e.g. runs/reports/x_rows.csv."
+    ),
+    groups: str = typer.Option(..., help="Comma list of the seed-ensemble names (the Holm family)."),
+    vs: str = typer.Option("", help="Also compare the other ensembles against this one."),
+    out: str = typer.Option("", help="Write runs/reports/<out>_*.csv (default: next to the rows file)."),
+) -> None:
+    """Recompute the statistics tables (session/date clusters, Holm) from saved rows, without simulating."""
+    from pathlib import Path
+
+    import pandas as pd
+
+    from hftf_eval.report import LABEL, regime_table, stats_table
+
+    path = Path(rows)
+    df = pd.read_csv(path)
+    ensembles = [g.strip() for g in groups.split(",") if g.strip()]
+    names = [p for p in df["policy"].unique() if p != "vwap"]
+    tables = {"vs_vwap": stats_table(df, names, family=ensembles)}
+    if vs:
+        tables["vs_group"] = stats_table(df, [e for e in ensembles if e != vs], reference=vs)
+    if LABEL in df.columns:
+        tables["regime"] = regime_table(df, ensembles)
+    for key in ("vs_vwap", "vs_group"):
+        if key in tables:
+            _print_stats(tables[key], path.stem)
+    base = path.parent / (out or path.stem.removesuffix("_rows"))
+    for key, table in tables.items():
+        table.to_csv(f"{base}_{key}.csv", index=False)
+    console.print(f"wrote {base}_*.csv")
+
+
+@app.command("serve")
+def serve(
+    config: str = typer.Option("configs/demo.yaml", help="Demo config: policies, runs and report tables."),
+    port: int = typer.Option(8000, help="Port on 127.0.0.1 (local only: the data is licensed)."),
+) -> None:
+    """Run the demo API (docs/DEMO_PLAN.md) on localhost; OpenAPI docs at /docs."""
+    import uvicorn
+
+    from hftf_api.app import create_app
+    from hftf_api.service import DemoService
+    from hftf_data.paths import REPO_ROOT
+
+    service = DemoService.from_config(REPO_ROOT / config)
+    console.print(f"policies: {', '.join(service.policies)}; runs: {', '.join(service.runs) or '-'}")
+    uvicorn.run(create_app(service), host="127.0.0.1", port=port)
+
+
+if __name__ == "__main__":
+    app()

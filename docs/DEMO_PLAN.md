@@ -1,6 +1,6 @@
 # M6 plan: demo backend and frontend
 
-Status: **planned** (2026-10-29). This is the plan for the course demo: a local web app that shows the
+Status: **M6a-M6b built** (2026-10-29); the frontend is specified in [UI_DESIGN.md](UI_DESIGN.md). This is the plan for the course demo: a local web app that shows the
 system working on a real parent order, from the order ticket through the eFNN's regime reasoning to the fills
 and the cost against VWAP. Design decisions made while building go in `ARCHITECTURE.md` (decision log), as
 for M0-M5.
@@ -57,17 +57,24 @@ identical episodes. This is the only new logic. The API only serialises it.
 
 | Endpoint | Returns |
 |---|---|
-| `GET /meta` | securities, sessions per split (with a tick flag), horizons, available policy groups (from `configs/demo.yaml`) |
-| `POST /order` | body: security, date, start time, horizon, side, participation (or "random"), policies, `sim: bar\|tick`. Returns the §3.1 trace for every policy + VWAP/TWAP/AC and a summary row each |
-| `GET /policies/{name}/rules` | rule table (terms, centres, widths, pace, passive, share on val) and the MF parameters for plotting |
-| `GET /runs/{name}` | training curves (`progress.csv`: val vs VWAP, KL, rule count) and structure events (`events.csv`) |
-| `GET /results` | the M4/M5 tables from `runs/reports/*.csv`, computed by `stats_table` / `regime_table`: ensembles vs VWAP with session CI, Holm p and date CI; architecture pairs; breakdowns by regime, security and horizon; robustness sweep; the replication run alongside ours |
+| `GET /api/meta` | securities, sessions per split (with a tick flag), horizons, available policy groups (from `configs/demo.yaml`) |
+| `POST /api/order` | body: security, date, start time, horizon, side, participation, policies, `sim: bar\|tick`. Returns the §3.1 trace for every policy and a summary row each. `GET /api/order/random` gives a random ticket |
+| `GET /api/policies/{name}/rules` | rule table (terms, centres, widths, pace, passive, share on val) and the MF parameters for plotting |
+| `GET /api/runs/{name}` | training curves (`progress.csv`: val vs VWAP, KL, rule count) and structure events (`events.csv`) |
+| `GET /api/results` | the M4/M5 tables from `runs/reports/*.csv`, computed by `stats_table` / `regime_table`: ensembles vs VWAP with session CI, Holm p and date CI; architecture pairs; breakdowns by regime, security and horizon; robustness sweep; the replication run alongside ours |
 
 Pydantic response models give the frontend a typed contract (exported as OpenAPI, from which TS types are
 generated with `openapi-typescript`). Market data and checkpoints load once at start-up. Tests use FastAPI's
 `TestClient` on the synthetic market (`hftf_sim.testing`), so CI needs no licensed data.
 
-### 3.3 Frontend: `web/` (React 18 + Vite + TypeScript; ECharts for charts)
+**As built (M6a-M6b):** `hftf_eval.trace.run_trace` (a policy may expose `explain(env)` for its rule firing,
+so hftf-eval stays torch-free); `hftf_sim.episodes.order_episode` builds an order from a ticket; `apps/api`
+(`hftf-api`: `schemas.py` contract, `service.py` logic, `app.py` routes) with `uv run hftf serve`, bound to
+127.0.0.1. On the real data, `/api/order` answers in 0.28 s (BarSim) / 0.33 s (TickSim) for 8 policies,
+`/api/policies/{name}/rules` in 0.2 s (then cached), the others in < 20 ms. `hftf eval restat` recomputes the
+report tables (Holm, date clusters) from saved backtest rows without simulating.
+
+### 3.3 Frontend: `web/` (React 18 + Vite + TypeScript; ECharts for charts). Design spec: [UI_DESIGN.md](UI_DESIGN.md)
 1. **Order ticket:** stock, session date, start time, horizon (30/60/120), side, size (% of expected
    volume), policies to compare, BarSim/TickSim, limit orders on/off, and a "random order" button.
 2. **Execution replay** (the main screen, with a play/pause scrubber over the minutes):
@@ -90,8 +97,8 @@ generated with `openapi-typescript`). Market data and checkpoints load once at s
 
 | | Deliverable | Exit criterion |
 |---|---|---|
-| **M6a** | `hftf_eval.trace` + tests; `configs/demo.yaml` | trace totals equal `summary()` for every policy type (MLP, ANFIS, eFNN, limit), BarSim and TickSim |
-| **M6b** | `apps/api` with the five endpoints + `hftf serve`; OpenAPI types | TestClient tests on synthetic data; `/order` < 300 ms for 5 policies on CPU |
+| **M6a** ✅ | `hftf_eval.trace` + tests; `configs/demo.yaml` | trace totals equal `summary()` for every policy type (MLP, ANFIS, eFNN, limit), BarSim and TickSim |
+| **M6b** ✅ | `apps/api` with the five endpoints + `hftf serve`; OpenAPI types | TestClient tests on synthetic data; `/order` < 300 ms for 5 policies on CPU |
 | **M6c** | `web/` order ticket + execution replay | one real val order replays end to end for eFNN vs VWAP |
 | **M6d** | fuzzy brain panel | MFs, firing and the active rule animate in sync; rule text matches `hftf eval rules` |
 | **M6e** | learning + results views; demo script | a 3-minute scripted demo runs from a clean checkout plus local `data/` and `runs/` |

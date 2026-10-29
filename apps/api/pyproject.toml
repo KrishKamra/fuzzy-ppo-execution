@@ -1,0 +1,21 @@
+[project]
+name = "hftf-api"
+version = "0.1.0"
+description = "Local demo backend: order traces, rules, training curves and results over HTTP (docs/DEMO_PLAN.md)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "hftf-data",
+    "hftf-sim",
+    "hftf-rl",
+    "hftf-eval",
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hftf_api"]

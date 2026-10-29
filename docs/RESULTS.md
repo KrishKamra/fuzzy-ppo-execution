@@ -325,3 +325,115 @@ after high-RV days, MLP −0.12, ANFIS −0.18, eFNN −0.18; after mid-RV days,
 - **Limitations:** 3 stocks and 60 training sessions; a parametric impact model with no depth data; and a
   test split of 36 stock-sessions, which can resolve differences of ~0.1 bps between policies but not
   smaller ones.
+
+## M5 (part 1): TickSim re-evaluation of the M4 policies (2026-10-29)
+
+TickSim (ARCHITECTURE §4.8) replays each child against the real 1-second L1 state: it fills at the touch
+1 s after the bar boundary, shares within the displayed depth pay the half spread only, and the excess
+walks the book with BarSim's square-root term. Ticks exist only on the **val tick sessions** (Sep 21-30,
+8 per stock = 24) and the test sessions. **The test split is not used here.** Policies are the unchanged
+M4 checkpoints (trained in BarSim). BarSim and TickSim run on **identical** episodes (seed 1, 4,000), so
+every difference below is paired.
+
+```bash
+uv run hftf data build-l1                                   # data/processed/l1_1s_v1.parquet (13 s)
+uv run hftf eval compare mlp='runs/m4_mlp_s*/best.pt' anfis='runs/m4_anfis_s*/best.pt' \
+    efnn='runs/m4_efnn_s*/best.pt' --split val --vs mlp --sim tick           # TickSim
+#   ... --tick-sessions (instead of --sim tick)                               # BarSim, same episodes
+```
+
+### What TickSim changes (VWAP, val tick sessions, seed 0; session-cluster 95% CI)
+
+| switch | VWAP cost − BarSim |
+|---|---|
+| fill at the replayed tick mid/spread at bar start + 1 s, no depth | −0.004 (−0.047, +0.035) |
+| + half spread only within displayed depth (**TickSim default**) | **−0.322** (−0.367, −0.278) |
+| latency 0 s / 5 s instead of 1 s | −0.317 / −0.321 |
+| 4 orders per decision (each pays the ₹20 per-order fee) | +2.807 (+2.507, +3.120); fees +3.17 |
+
+BarSim's end-of-bar fill is unbiased against the replayed book (timing −0.004, n.s.), and the whole gap
+comes from displayed depth. Splitting decisions into sub-minute orders does not pay under the per-order fee.
+
+### Policies: objective − VWAP (bps), 5-seed ensembles, 24 val tick sessions
+
+| policy | BarSim | TickSim | own TickSim − BarSim | − MLP (TickSim) |
+|---|---|---|---|---|
+| VWAP (cost) | 16.60 | 16.28 | −0.325 (−0.378, −0.274) | |
+| PPO-MLP | −0.107 (−0.227, +0.014), p 0.065 | **−0.166** (−0.292, −0.041), p 0.012 | −0.384 | |
+| PPO-ANFIS | −0.149 (−0.269, −0.029), p 0.023 | **−0.195** (−0.323, −0.069), p 0.005 | −0.370 | −0.029 (−0.071, +0.013) |
+| PPO-eFNN | −0.123 (−0.261, +0.007), p 0.046 | **−0.180** (−0.324, −0.048), p 0.004 | −0.382 | −0.014 (−0.061, +0.028) |
+
+Single seeds in TickSim: MLP −0.04 to −0.22, ANFIS −0.12 to −0.28, eFNN −0.12 to −0.28 (every one < 0).
+
+### Reading
+
+- **The M4 edge survives the higher-fidelity fill model and grows by about 0.05 bps.** Every policy gains
+  more from real depth than VWAP does (−0.37 to −0.38 vs −0.33). The policies pace slightly behind the
+  schedule (M4 rules: 0.90-0.96), so their children are smaller and more of each one fits inside the touch.
+  In TickSim every ensemble's CI excludes 0.
+- On these 24 sessions (the last third of val), the BarSim edge is smaller than on the full val split
+  (−0.11 to −0.15 vs −0.24) and the MLP CI covers 0. This is a smaller, later sample, not a TickSim effect:
+  both columns use the same episodes.
+- Fuzzy vs MLP is still indistinguishable (±0.05 bps).
+- Limits: depth beyond L1 is still parametric, and the replay is counterfactual (the book does not react
+  to us except through the transient displacement). The 1-second grid comes from ~1 s conflated snapshots.
+
+## M5 (part 2): limit orders (2026-10-29)
+
+Design: ARCHITECTURE §4.9. Each decision posts a passive fraction `f` of the child at the near touch; the
+rest goes aggressively, and unfilled passive shares return to the inventory at the end of the bar.
+Policies train in **BarSim** with a bar-range fill rule and are evaluated in **TickSim** with a queue model.
+Both fill models cap a fill at the volume that traded at or through our price. BarSim's two caps were
+fitted to the queue model on the val tick sessions: θ_touch = 0.0656, θ_through = 0.2942. Fill rates are
+48.7% (bar) vs 47.1% (queue) of posted shares over 68k synthetic orders. Runs: 3 seeds × {MLP, eFNN}, same
+PPO config as M4, `init_passive` 0.2. Evaluation: val tick sessions (24), seed 1, 4,000 episodes,
+identical in both simulators; pace-only references are the M4 seeds 0-2 ensembles.
+
+```bash
+uv run hftf eval calibrate-limit --split val
+uv run hftf train ppo --run m5_lim_efnn_s0 --policy fuzzy --seed 0 --limit     # --policy mlp
+```
+
+### What did not work first (kept for the report)
+
+The first calibration let any print **through** our price fill the whole order, however large. Under
+that model a naive "always post the whole child passively" VWAP beat VWAP by −3.0 bps in TickSim, which is
+an artefact: a 5-share print through the bid filled 400 shares. Those runs (`m5_limit_*`) are discarded.
+With the volume cap, the queue model fills 47% of posted shares instead of 72%.
+
+### Results (objective − reference, bps; 95% session-cluster CI; Wilcoxon p)
+
+| policy (val tick sessions) | cost BarSim | cost TickSim | − VWAP, TickSim | passive share | CVaR95 IS (TickSim) |
+|---|---|---|---|---|---|
+| VWAP | 16.60 | 16.28 | | 0 | 68.6 |
+| VWAP, 100% passive (naive) | 13.93 | 14.39 | **−1.895** (−2.294, −1.473), p 0.000 | 82% | 75.0 |
+| PPO-MLP (pace only) | 16.46 | 16.07 | −0.207 (−0.357, −0.069), p 0.003 | 0 | 67.4 |
+| PPO-eFNN (pace only) | 16.47 | 16.08 | −0.200 (−0.354, −0.065), p 0.005 | 0 | 66.8 |
+| PPO-MLP + limit | 15.69 | 15.89 | −0.391 (−0.669, −0.112), p 0.013 | 58% | 77.8 |
+| PPO-eFNN + limit | 15.69 | 15.89 | −0.391 (−0.684, −0.085), p 0.018 | 56% | 79.6 |
+
+| paired comparison, TickSim | diff |
+|---|---|
+| limit-MLP − MLP | −0.184 (−0.500, +0.154), p 0.121 |
+| limit-eFNN − eFNN | −0.191 (−0.520, +0.173), p 0.095 |
+| limit-eFNN − limit-MLP | −0.000 (−0.105, +0.098) |
+| limit policies − naive 100% passive | +1.504 (+1.19, +1.80) |
+
+In BarSim (the training simulator) the limit policies are −0.91 vs VWAP and −0.77 vs their pace-only versions.
+
+### Reading (honest)
+
+- **The learned limit policies beat VWAP in TickSim (−0.39 bps) but are not significantly better than the
+  pace-only policies, and they lose to the naive always-passive rule by 1.5 bps.**
+- **Cause: the action parameterisation, not the network.** Both architectures settle at a passive fraction
+  of about 0.56-0.6, where every child is split into a passive and an aggressive order. Each order pays the
+  ₹20 fixed fee, so fees rise by +0.6 to +0.7 bps over VWAP, while always-passive *lowers* fees (fewer
+  orders). A Beta-distributed fraction never reaches exactly 0 or 1, so the policy cannot learn "all
+  passive" without paying the second fee: the reward has a cliff at f = 1 that the continuous head cannot
+  reach. **Next step:** a dead-zone (f > 0.9 → all passive, f < 0.1 → none) or a discrete market/limit head.
+- **Passive edges are fragile to the fill model:** the limit policies lose 0.5 bps of their edge from
+  BarSim to TickSim (the pace edge did not lose any; part 1). Passive fills also widen the tail: CVaR95
+  of IS is 75-80 vs 67-69, because unfilled shares wait while the price runs away.
+- **Model caveats:** our resting order does not change the historical prints (no queue displacement of
+  other traders), and conflated ~1 s snapshots make the queue position approximate. The always-passive
+  advantage (−1.9 bps) is therefore an upper bound on what passive execution is worth here, not an estimate.

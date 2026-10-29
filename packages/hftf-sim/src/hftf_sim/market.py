@@ -25,7 +25,7 @@ REGIME_COLUMNS = ("imb_bar_proxy_ema5", "log_spread_var_30m", "log_rv_30m")
 MARKET_COLUMNS = ("spread_bps", "dev_vwap_bps", "ret_5m", "ctx_nifty_ret_30m", "ctx_vix")
 SIGNED_COLUMNS = ("imb_bar_proxy_ema5", "dev_vwap_bps", "ret_5m", "ctx_nifty_ret_30m")
 # Fill-side columns: realised values the simulator may use but the agent never observes.
-FILL_COLUMNS = ("mid", "spread_bps", "volume", "value", "rv_30m", "prof_avg_vol")
+FILL_COLUMNS = ("mid", "spread_bps", "volume", "value", "rv_30m", "prof_avg_vol", "bid", "ask", "h", "l")
 RV_WINDOW = 30
 
 
@@ -39,6 +39,10 @@ class MarketData:
     volume: np.ndarray
     value: np.ndarray
     sigma: np.ndarray  # 1-min return vol, rv_30m / sqrt(30)
+    bid: np.ndarray  # closing quote of the bar (the passive price posted at the next decision)
+    ask: np.ndarray
+    high: np.ndarray  # trade range of the bar (BarSim passive fills)
+    low: np.ndarray
     prof: np.ndarray  # expected minute volume from the previous sessions' profile
     cum_prof: np.ndarray  # (n_sessions, 361): cum_prof[:, j] = sum of prof over rows < j
     obs: np.ndarray  # (n_sessions, 360, n_obs) standardised observation columns
@@ -93,6 +97,10 @@ class MarketData:
             volume=grid("volume"),
             value=grid("value"),
             sigma=grid("rv_30m") / np.sqrt(RV_WINDOW),
+            bid=grid("bid"),
+            ask=grid("ask"),
+            high=grid("h"),
+            low=grid("l"),
             prof=prof,
             cum_prof=np.concatenate([np.zeros((len(sessions), 1)), np.cumsum(prof, axis=1)], axis=1),
             obs=np.clip(z, -OBS_CLIP, OBS_CLIP),

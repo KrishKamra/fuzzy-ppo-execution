@@ -3,6 +3,9 @@
 The policy samples `u ~ Beta(α, β)` on (0, 1) and the env receives the pace `a = a_max · u`.
 `(α, β) = 1 + softplus(·)` keeps the density unimodal. Heads are initialised so the starting policy is
 a noisy adaptive VWAP (mean pace `init_pace`).
+
+With `limit=True` (ARCHITECTURE §4.9) the actor has a second, independent Beta for the passive fraction
+`f ∈ (0, 1)` of each child: `u = (u_pace, u_passive)` and the env receives `(a_max · u_pace, u_passive)`.
 """
 
 from __future__ import annotations
@@ -12,7 +15,7 @@ import math
 import numpy as np
 import torch
 from torch import nn
-from torch.distributions import Beta
+from torch.distributions import Beta, Distribution, Independent
 
 from hftf_fuzzy.layer import FuzzyTSK
 
@@ -48,11 +51,27 @@ def _beta_bias(a_max: float, init_pace: float, init_concentration: float) -> tor
     )
 
 
+def _actor_bias(a_max: float, init_pace: float, init_concentration: float, limit: bool, init_passive: float):
+    bias = _beta_bias(a_max, init_pace, init_concentration)
+    return torch.cat([bias, _beta_bias(1.0, init_passive, init_concentration)]) if limit else bias
+
+
 class _PaceActorCritic(nn.Module):
-    """Shared sampling helpers; subclasses implement `forward(obs) -> (Beta, V)`."""
+    """Shared sampling helpers; subclasses implement `forward(obs) -> (distribution, V)`."""
 
     kind = ""
     a_max = 4.0
+    limit = False
+
+    def _dist(self, ab: torch.Tensor) -> Distribution:
+        """Beta over the pace, or (limit orders) independent Betas over pace and passive fraction."""
+        if not self.limit:
+            return Beta(ab[..., 0], ab[..., 1])
+        return Independent(Beta(ab[..., 0::2], ab[..., 1::2]), 1)
+
+    def to_action(self, u: np.ndarray) -> np.ndarray:
+        """Unit-interval sample(s) -> env action: the pace, or (pace, passive fraction)."""
+        return u * (np.array([self.a_max, 1.0]) if self.limit else self.a_max)
 
     def value(self, obs: torch.Tensor) -> torch.Tensor:
         return self(obs)[1]
@@ -66,8 +85,9 @@ class _PaceActorCritic(nn.Module):
 
     @torch.no_grad()
     def mean_pace(self, obs: np.ndarray) -> np.ndarray:
+        """Deterministic action (Beta means): the pace, or (pace, passive fraction) with limit orders."""
         dist, _ = self(torch.as_tensor(obs, dtype=torch.float32))
-        return dist.mean.numpy() * self.a_max
+        return self.to_action(dist.mean.numpy())
 
 
 class MLPActorCritic(_PaceActorCritic):
@@ -83,6 +103,8 @@ class MLPActorCritic(_PaceActorCritic):
         activation: str = "tanh",
         init_pace: float = 1.0,
         init_concentration: float = 8.0,
+        limit: bool = False,
+        init_passive: float = 0.2,
     ) -> None:
         super().__init__()
         self.arch = {
@@ -92,18 +114,20 @@ class MLPActorCritic(_PaceActorCritic):
             "activation": activation,
             "init_pace": init_pace,
             "init_concentration": init_concentration,
+            "limit": limit,
+            "init_passive": init_passive,
         }
-        self.a_max = a_max
+        self.a_max, self.limit = a_max, limit
         self.trunk, n_in = _trunk(obs_dim, hidden, activation)
-        self.actor = _layer(n_in, 2, 0.01)
+        self.actor = _layer(n_in, 4 if limit else 2, 0.01)
         self.critic = _layer(n_in, 1, 1.0)
         with torch.no_grad():
-            self.actor.bias.copy_(_beta_bias(a_max, init_pace, init_concentration))
+            self.actor.bias.copy_(_actor_bias(a_max, init_pace, init_concentration, limit, init_passive))
 
-    def forward(self, obs: torch.Tensor) -> tuple[Beta, torch.Tensor]:
+    def forward(self, obs: torch.Tensor) -> tuple[Distribution, torch.Tensor]:
         h = self.trunk(obs)
         ab = 1.0 + nn.functional.softplus(self.actor(h))
-        return Beta(ab[..., 0], ab[..., 1]), self.critic(h).squeeze(-1)
+        return self._dist(ab), self.critic(h).squeeze(-1)
 
 
 class FuzzyActorCritic(_PaceActorCritic):
@@ -134,6 +158,8 @@ class FuzzyActorCritic(_PaceActorCritic):
         antecedent_grad: str = "all",
         width: float = 1.0,
         gate: str = "soft",
+        limit: bool = False,
+        init_passive: float = 0.2,
     ) -> None:
         super().__init__()
         if antecedent_grad not in ("all", "value_only", "none"):
@@ -151,15 +177,19 @@ class FuzzyActorCritic(_PaceActorCritic):
             "antecedent_grad": antecedent_grad,
             "width": width,
             "gate": gate,
+            "limit": limit,
+            "init_passive": init_passive,
         }
         self.a_max, self.regime_dim, self.antecedent_grad = a_max, regime_dim, antecedent_grad
-        self.gate = gate
+        self.gate, self.limit = gate, limit
         self.trunk, n_in = _trunk(obs_dim, hidden, activation)
-        self.fuzzy = FuzzyTSK(regime_dim, n_rules, {"actor": 2, "critic": 1}, n_in, width)
-        actor, critic = _layer(n_in, 2, 0.01), _layer(n_in, 1, 1.0)
+        n_actor = 4 if limit else 2
+        self.fuzzy = FuzzyTSK(regime_dim, n_rules, {"actor": n_actor, "critic": 1}, n_in, width)
+        actor, critic = _layer(n_in, n_actor, 0.01), _layer(n_in, 1, 1.0)
+        bias = _actor_bias(a_max, init_pace, init_concentration, limit, init_passive)
         with torch.no_grad():
             self.fuzzy.actor_W.copy_(actor.weight.expand(n_rules, -1, -1))
-            self.fuzzy.actor_b.copy_(_beta_bias(a_max, init_pace, init_concentration).expand(n_rules, -1))
+            self.fuzzy.actor_b.copy_(bias.expand(n_rules, -1))
             self.fuzzy.critic_W.copy_(critic.weight.expand(n_rules, -1, -1))
 
     @property
@@ -169,7 +199,7 @@ class FuzzyActorCritic(_PaceActorCritic):
     def regime(self, obs: torch.Tensor) -> torch.Tensor:
         return obs[..., : self.regime_dim]
 
-    def forward(self, obs: torch.Tensor) -> tuple[Beta, torch.Tensor]:
+    def forward(self, obs: torch.Tensor) -> tuple[Distribution, torch.Tensor]:
         h = self.trunk(obs)
         phi = self.fuzzy.phi(self.regime(obs))
         if self.gate == "hard":
@@ -177,7 +207,7 @@ class FuzzyActorCritic(_PaceActorCritic):
         phi_actor = phi if self.antecedent_grad == "all" else phi.detach()
         phi_critic = phi.detach() if self.antecedent_grad == "none" else phi
         ab = 1.0 + nn.functional.softplus(self.fuzzy.head("actor", h, phi_actor))
-        return Beta(ab[..., 0], ab[..., 1]), self.fuzzy.head("critic", h, phi_critic).squeeze(-1)
+        return self._dist(ab), self.fuzzy.head("critic", h, phi_critic).squeeze(-1)
 
     @torch.no_grad()
     def embed(self, obs: torch.Tensor) -> torch.Tensor:

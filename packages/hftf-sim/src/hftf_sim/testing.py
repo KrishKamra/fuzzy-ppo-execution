@@ -30,6 +30,9 @@ def synthetic_frame(n_sessions: int = 2, seed: int = 0, flat: bool = False) -> p
     df["volume"] = 1000.0 if flat else rng.uniform(200, 2000, size=n)
     df["value"] = df["volume"] * df["mid"]
     df["rv_30m"] = 0.003
+    half = df["mid"] * df["spread_bps"] / 2e4
+    df["bid"], df["ask"] = df["mid"] - half, df["mid"] + half
+    df["h"], df["l"] = df["ask"], df["bid"]  # trades at the touch, never through it
     df["prof_avg_vol"] = 1000.0
     return df
 
@@ -52,3 +55,24 @@ def linear_cfg(gamma: float = 0.0, lam: float = 0.0) -> EnvConfig:
     cfg.impact = ImpactConfig(beta=1.0, eta=0.5, gamma=gamma, tau_res_min=1e12)
     cfg.reward.risk_aversion = lam
     return cfg
+
+
+def synthetic_ticks(frame: pd.DataFrame, depth: float = 1e9) -> pd.DataFrame:
+    """A 1-second L1 grid consistent with the bars of `synthetic_frame` (DATA_AUDIT F12): second `s` of a
+    session carries the closing quote of bar ⌈s/60⌉ − 1, so row 60(m+1) is bar m's close. No prints: tests
+    write the trade columns they need."""
+    rows = []
+    for (sec, date), g in frame.groupby(["security", "date"], sort=False):
+        bar = np.maximum((np.arange(SESSION_MINUTES * 60) - 1) // 60, 0)
+        mid = g["mid"].to_numpy()[bar]
+        half = mid * g["spread_bps"].to_numpy()[bar] / 2e4
+        rows.append(
+            pd.DataFrame(
+                {
+                    "security": sec, "date": date, "sec": np.arange(len(bar)),
+                    "bid": mid - half, "ask": mid + half, "bid_sz": depth, "ask_sz": depth,
+                    "buy_vol": 0.0, "sell_vol": 0.0, "px_min": np.nan, "px_max": np.nan,
+                }
+            )
+        )  # fmt: skip
+    return pd.concat(rows, ignore_index=True)

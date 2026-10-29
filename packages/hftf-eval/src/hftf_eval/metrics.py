@@ -27,6 +27,7 @@ def summarize(df: pd.DataFrame, by: str = "policy") -> pd.DataFrame:
             "objective": g["cost_bps"].mean(),
             "vwap_slip": g["vwap_slip_bps"].mean(),
             "children": g["n_children"].mean(),
+            "passive": g["passive_frac"].mean(),  # share of the order filled by passive (limit) children
         }
     )
 

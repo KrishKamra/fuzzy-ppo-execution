@@ -40,10 +40,19 @@ class EpisodeSampler:
     """Uniform over the split's sessions, horizons, `t0 ∈ [earliest_start, latest_end − H]` and sides;
     `Q = ρ · Σ expected volume over the fill bars`, `ρ ~ LogUniform`."""
 
-    def __init__(self, market: MarketData, cfg: EpisodeConfig, split: str | None = "train") -> None:
+    def __init__(
+        self,
+        market: MarketData,
+        cfg: EpisodeConfig,
+        split: str | None = "train",
+        sessions: np.ndarray | None = None,
+    ) -> None:
+        """`sessions` restricts sampling to those session ids within the split (e.g. the tick sessions)."""
         self.market = market
         self.cfg = cfg
         self.sessions = market.session_ids(split)
+        if sessions is not None:
+            self.sessions = np.intersect1d(self.sessions, sessions)
         if len(self.sessions) == 0:
             raise ValueError(f"no sessions in split {split!r}")
         self.horizons = np.asarray(cfg.horizons_min)

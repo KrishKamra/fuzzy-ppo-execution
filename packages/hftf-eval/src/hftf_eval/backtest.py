@@ -12,13 +12,17 @@ from hftf_sim.env import BatchExecutionEnv
 from hftf_sim.episodes import Episodes, EpisodeSampler
 from hftf_sim.fees import FeeModel
 from hftf_sim.market import MarketData
+from hftf_sim.tick import TickData, make_env
 
 # env state -> child sizes in shares, or pace multipliers if the policy sets `action_space = "pace"`
 Policy = Callable[[BatchExecutionEnv], np.ndarray]
 
 
-def sample_episodes(market: MarketData, cfg: EnvConfig, split: str, n: int, seed: int) -> Episodes:
-    return EpisodeSampler(market, cfg.episode, split).sample(n, np.random.default_rng(seed))
+def sample_episodes(
+    market: MarketData, cfg: EnvConfig, split: str, n: int, seed: int, sessions: np.ndarray | None = None
+) -> Episodes:
+    """`sessions` restricts the episodes to those session ids (e.g. the tick sessions, for TickSim)."""
+    return EpisodeSampler(market, cfg.episode, split, sessions).sample(n, np.random.default_rng(seed))
 
 
 def run_policy(
@@ -29,13 +33,15 @@ def run_policy(
     fees: FeeModel | None = None,
     randomise_impact: bool = False,
     batch: int = 4096,
+    ticks: TickData | None = None,
 ) -> pd.DataFrame:
-    """One row per episode: the env summary (bps of arrival notional) plus the episode description."""
+    """One row per episode: the env summary (bps of arrival notional) plus the episode description.
+    With `ticks`, the episodes run in TickSim (fills against the replayed L1 touch)."""
     frames = []
     for lo in range(0, len(episodes), batch):
         ep = episodes.take(np.arange(lo, min(lo + batch, len(episodes))))
-        env = BatchExecutionEnv(
-            market, cfg, fees=fees, n_envs=len(ep), autoreset=False, randomise_impact=randomise_impact
+        env = make_env(
+            market, cfg, ticks, fees=fees, n_envs=len(ep), autoreset=False, randomise_impact=randomise_impact
         )
         env.reset(ep)
         step = env.step if getattr(policy, "action_space", "shares") == "pace" else env.step_shares

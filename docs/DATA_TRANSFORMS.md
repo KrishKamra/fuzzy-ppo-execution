@@ -47,6 +47,7 @@ deterministic. `features_1m_v3.manifest.json` records what was dropped and fille
 | T20 | Tick features left NaN on non-tick days | deliberately not imputed | `features.build_security` | `l1_imb_*`, `ofi*`, trade flow |
 | T21 | Split labels and exclusions | labelling | `features.assign_split` | `split`, `dq_burnin`, `dq_partial_day` |
 | T22 | Data-quality flags | flagging | `features.build_security` | `dq_offbook_frac`, `dq_*`, `fill_*` |
+| T23 | 1-second L1 grid of the tick sessions | LOCF within session, flagged by age | `l1.second_grid` | `l1_1s_v1.parquet` (TickSim) |
 
 ## Cleaning the raw pull
 
@@ -168,6 +169,21 @@ analysis and the R06-R08 checks.
 Also not done: no outlier clipping (spreads up to 56 bps and 1-min moves of about 1.2% are real prints on
 heavy volume), no smoothing of prices, no cross-day forward fill, and no use of futures or FX (the NZ1 ASK
 Jun 3-5 and FX Aug 26 gaps are therefore irrelevant).
+
+## 1-second L1 grid (TickSim input, M5)
+
+**T23. `data/processed/l1_1s_v1.parquet`** (`uv run hftf data build-l1`, `hftf_data.l1`; a manifest is
+written next to it). One row per second of 09:15-15:15 IST for every tick session kept in
+`features_1m_v3` (63 sessions: val 24, test 36, the excluded partial Oct 21: 3), 1,360,800 rows.
+- **Quotes:** the T6-collapsed L1 state after the last update stamped in that second. A second without an
+  update **carries the previous state inside the session** (LOCF, as T13), and `quote_age_s` counts the
+  carried seconds (17.6% of rows; p99 3-4 s, max 16 s on val/test). Seconds before the session's first
+  valid quote (at most 2 s after 09:15) stay **NaN, never back-filled**; the simulator reads rows from 09:20.
+- **Trades:** the T5-filtered prints with the T7 sign, summed per second (`volume`, `buy_vol`, `sell_vol`)
+  with `px_min` / `px_max`. A second without a print has volume 0 (observed: nothing traded) and NaN prices.
+- **Clock:** bar `m` = seconds `60m+1 … 60m+60` (DATA_AUDIT F12). Per-minute tick volume equals bar volume
+  on every tick minute, and the bar's closing quote equals row `60(m+1)`.
+- Nothing is synthesised: there are no grids for non-tick days, and the train split has none.
 
 ## Labels and flags
 

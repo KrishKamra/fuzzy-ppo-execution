@@ -386,7 +386,8 @@ available on every bar day.
 | M2: PPO-MLP (beats VWAP on train in 3/3 seeds; docs/RESULTS.md) | **done** |
 | M3: static fuzzy → evolving fuzzy (edits logged, KL-guarded; docs/RESULTS.md) | **done** |
 | M4: experiments, ablations, robustness, report (expected-drift reward, seed ensembles, session-cluster stats; docs/RESULTS.md) | **done** |
-| M5: full-universe data, TickSim, limit orders | planned |
+| M5: TickSim + limit orders built and evaluated on val tick sessions (docs/RESULTS.md M5); limit head needs a dead-zone or discrete order type (full-universe data dropped: pull frozen) | **in progress** |
+| M6: demo backend + frontend (docs/DEMO_PLAN.md) | planned |
 
 **Data readiness:** `uv run hftf data build-features && uv run hftf data audit --strict` gives pass/fail
 against `docs/DATA_READINESS.md`: **READY, 12/12**. Every transformation is logged in `docs/DATA_TRANSFORMS.md`.

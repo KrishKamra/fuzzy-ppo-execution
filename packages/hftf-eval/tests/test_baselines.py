@@ -53,3 +53,16 @@ def test_every_baseline_completes_every_episode():
 
 def test_cvar_is_the_tail_mean():
     assert cvar(np.arange(100.0)) == pytest.approx(97.0)
+
+
+def test_passive_vwap_posts_its_fraction_and_completes():
+    from hftf_eval.baselines import PassiveVWAP
+
+    mk, cfg = market(), EnvConfig.load()
+    rows = {f: run_policy(PassiveVWAP(f), mk, cfg, episodes(8)) for f in (0.0, 1.0)}
+    np.testing.assert_array_equal(rows[0.0]["passive_frac"], 0.0)
+    assert (rows[1.0]["passive_frac"] > 0).all()
+    assert (rows[1.0]["executed"] == 3000.0).all() and (rows[0.0]["executed"] == 3000.0).all()
+    pd.testing.assert_series_equal(  # f = 0 is plain VWAP
+        rows[0.0]["cost_bps"], run_policy(VWAP(), mk, cfg, episodes(8))["cost_bps"], check_names=False
+    )

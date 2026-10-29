@@ -48,6 +48,27 @@ class RewardConfig(BaseModel):
     price_drift: Literal["realised", "expected"] = "realised"
 
 
+class TickConfig(BaseModel):
+    """TickSim (ARCHITECTURE §4.8): fills against the replayed 1-second L1 state on tick sessions."""
+
+    path: str = "data/processed/l1_1s_v1.parquet"
+    latency_s: int = Field(1, ge=0, le=14)  # send at the bar boundary, fill against the state L seconds later
+    # Orders per decision, sent evenly over the minute. Each is a child order and pays the per-order fee.
+    sub_slices: int = Field(1, ge=1, le=4)
+    depth_fills: bool = True  # shares within the displayed touch pay the half spread only (no walk)
+
+
+class LimitConfig(BaseModel):
+    """Passive child orders at the near touch (ARCHITECTURE §4.9)."""
+
+    enabled: bool = False  # policies get a second action: the passive fraction of each child
+    # BarSim: a bar that trades at our price but not through it fills min(posted, θ_touch·V), one that trades
+    # through it min(posted, θ_through·V); both fitted to the TickSim queue model on the val tick sessions
+    # (`hftf eval calibrate-limit`).
+    touch_fill_frac: float = 0.05
+    through_fill_frac: float = 0.2
+
+
 class EnvConfig(BaseModel):
     features_path: str = "data/processed/features_1m_v3.parquet"
     episode: EpisodeConfig = EpisodeConfig()
@@ -55,6 +76,8 @@ class EnvConfig(BaseModel):
     regime_inputs: list[str] = ["imb_bar_proxy_ema5", "log_spread_var_30m", "log_rv_30m"]
     impact: ImpactConfig = ImpactConfig()
     reward: RewardConfig = RewardConfig()
+    tick: TickConfig = TickConfig()
+    limit: LimitConfig = LimitConfig()
 
     @classmethod
     def load(cls, path: Path = ENV_YAML) -> EnvConfig:

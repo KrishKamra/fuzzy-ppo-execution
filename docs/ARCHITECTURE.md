@@ -158,6 +158,52 @@ indexed per step by `(session, row0 + k)`, which is equivalent to pre-slicing an
 4,000 episodes per baseline in 0.2 s. Baselines (`hftf-eval`) act in shares through `step_shares` and are
 not participation-capped, except VWAP, which is the pace action `a = 1`.
 
+### 4.8 TickSim (M5, built: evaluation on tick sessions)
+Ticks exist only on val (8) and test (12) sessions per stock, and **none on train**. TickSim is therefore a
+higher-fidelity **evaluation** simulator: policies trained in BarSim are replayed against the real L1 state
+on the same episodes. The agent, its observation (1-minute features) and its decision clock are unchanged;
+only the fill changes (`hftf_sim.tick.TickExecutionEnv`, a subclass of the BarSim env).
+- **Input:** `l1_1s_v1.parquet`, a 1-second L1 grid (DATA_TRANSFORMS T23). Bars and ticks share one clock:
+  bar `m` = seconds `60m+1 … 60m+60` (DATA_AUDIT F12), so the arrival mid is grid row `60(row0+1)`.
+- **Fill:** the child for bar `j` is sent at the bar boundary and fills against the touch at row `60j + L`
+  (latency `L = 1 s`). With displayed depth `d` on the side we take, `x = (q − d)⁺`:
+  `p = m·(1 + side·(D + s/2 + (x/q)·η·σ·(x/V)^β))`, so shares within the touch pay the half spread only
+  and the excess walks the book with BarSim's square-root term (depth beyond L1 is unknown). Transient
+  impact `D` is BarSim's OW state.
+- **Sub-minute orders (`tick.sub_slices`, default 1):** n orders per decision at offsets `L + ⌊60i/n⌋` s, with
+  `V/n` per order and kick `/n`, decayed continuously. Each order pays the per-order fee.
+- **Exact reduction (test):** one order and no depth fills, on a grid built from the bars, reproduces
+  BarSim's rewards and summaries exactly in every reward mode.
+- **CLI:** `hftf eval baselines|policy|compare|robustness --sim tick` (tick sessions of the split);
+  `--sim bar --tick-sessions` runs BarSim on the same episodes for paired sim-gap measurements.
+- **Measured gap (VWAP, val tick sessions):** timing alone (tick mid at bar start vs bar-close mid)
+  −0.004 bps (n.s.), depth −0.32 bps, latency 0-5 s nil, 4 orders per decision +2.8 bps (fees).
+
+### 4.9 Limit orders (M5, built)
+With `limit.enabled` (`hftf train ppo --limit`), the action is `(a, f)`: the pace and the **passive fraction**
+`f ∈ [0, 1]` of the child, from a second, independent Beta head (MLP and fuzzy TSK heads alike). Each decision
+posts `⌊f·q⌋` at the near touch (bid for a buy) and sends the rest aggressively. The passive order rests
+until the end of the bar, and the unfilled part is cancelled and returns to the inventory (the schedule
+re-plans it). The forced last step is all aggressive. A passive fill pays the limit price shifted by our
+transient displacement, with no spread, no temporary impact and no kick, plus fees. Each non-empty passive
+or aggressive order pays the per-order fee. `hftf_sim.limit` holds both fill models:
+- **BarSim (all days, used for training):** the decision's quote against the fill bar's trade range. If the
+  range trades through our price, `min(posted, θ_through·V)` fills; if it trades at our price,
+  `min(posted, θ_touch·V)`; if it never reaches our price, nothing fills.
+- **TickSim (tick sessions, used for evaluation):** a queue model. The order joins the back of the displayed
+  queue at row `60j + L`. Prints at our price (seller-initiated for a buy) consume the queue ahead, then us.
+  A print through our price clears the queue, and we fill up to the volume traded at or through our price.
+  **A fill never exceeds the volume that actually traded there.**
+- **Calibration:** θ_touch = 0.0656 and θ_through = 0.2942 each minimise the squared fill error of the bar
+  rule against the queue model on their own minutes, on the **val** tick sessions (`hftf eval
+  calibrate-limit`; it refuses `test`). Over 68k synthetic orders (1-30% of expected minute volume, both
+  sides), the bar rule fills 48.7% of shares and the queue model 47.1% (trade-through minutes 65.6 / 61.9%,
+  touched 22.1 / 20.6%). The bar trades through the decision quote in 66% of minutes.
+- **Naive reference:** `PassiveVWAP(f)` (`hftf_eval.baselines`) is adaptive VWAP with a fixed passive
+  fraction. A learned passive fraction is compared with it, not only with VWAP.
+- Adverse selection is not modelled separately; it comes from the replayed prices (passive buys fill when
+  the price trades down). Our resting order does not move the historical book.
+
 ## 5. Evolving fuzzy layer (`hftf-fuzzy`)
 
 ### 5.1 Inference (first-order TSK, product t-norm)
@@ -286,7 +332,8 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 | **M2** ✅ | PPO-MLP | beats VWAP on train; val gap reported |
 | **M3** ✅ | static fuzzy → evolving fuzzy | rule add/merge/prune logged; no PPO instability at edits (KL spikes < target) |
 | **M4** ✅ | experiments, ablations, robustness, report | paired stats tables, regime breakdowns, rule narratives |
-| **M5** | full-universe data, TickSim, limit orders | re-run M4 at scale |
+| **M5** | TickSim (§4.8) and limit orders (§4.9) on the frozen data (full-universe data dropped: the pull is frozen) | M4 policies re-evaluated in TickSim with paired BarSim-TickSim gaps; limit-order head evaluated on tick sessions |
+| **M6** | demo backend (`apps/api`) and frontend (`web/`): see `docs/DEMO_PLAN.md` | a real order replays end to end with the fuzzy reasoning visible |
 
 ## 10. Key risks
 
@@ -322,3 +369,7 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 | 2026-10-24 | Report session-cluster bootstrap CIs and session-level Wilcoxon tests, and seed ensembles as the headline policy | episodes on one session are correlated (per-episode CIs were ~2× too narrow on val); ensembling removes the seed lottery that made the M2 val result non-reproducible |
 | 2026-10-24 | Leave-one-stock-out refits the observation scaler on the training names, and checkpoints store their scaler | no statistic of the held-out name reaches the policy |
 | 2026-10-24 | M4 result: on the test split (run once), 5-seed ensembles beat VWAP by −0.16 (MLP), −0.24 (ANFIS) and −0.22 (eFNN) bps, all CIs excluding 0; they also beat TWAP/AC and win on held-out stocks (LOSO). Fuzzy − MLP on test −0.06 to −0.08 (Wilcoxon n.s.); eFNN ≈ ANFIS everywhere; eFNN > MLP under strong or persistent transient impact | the reward design, not the architecture, is the main effect; the fuzzy advantage is suggestive at default impact and clear only off the training range of transient impact (docs/RESULTS.md M4) |
+| 2026-10-29 | M5 scope: full-universe data is dropped (the pull is frozen); M5 is TickSim plus limit orders on the 20 tick sessions per stock. TickSim is an evaluation simulator: BarSim-trained policies are replayed against the 1-second L1 grid on the val tick sessions, and never trained on tick days | ticks exist only on val (8) and test (12) sessions, so training on them would spend the selection or the test set |
+| 2026-10-29 | TickSim fill: one order per decision at the bar boundary + 1 s, half spread only within displayed depth, BarSim's square-root walk on the excess; the bar/tick clock alignment comes from the data (bar `m` = seconds 60m+1…60m+60) | the measured gap to BarSim is entirely depth (−0.32 bps for VWAP; timing −0.004, n.s.), which validates BarSim's end-of-bar fill; 4 orders per decision cost +2.8 bps in per-order fees, so sub-minute slicing is a sensitivity option, not the default |
+| 2026-10-29 | Limit orders: a passive-fraction action with a second Beta head; policies train in BarSim with a bar-range fill rule whose θ is fitted to a TickSim queue model on the val tick sessions, and are evaluated in TickSim with the queue model | train has no ticks, so training on tick days would spend val or test; the bar rule is causal (decision quote vs the next bar's range) and calibrated without touching test; a continuous fraction keeps PPO's log-probabilities simple and nests the pace-only policy at f = 0 |
+| 2026-10-29 | Passive fills are capped by the volume that traded at or through our price (two calibrated BarSim caps, θ_touch and θ_through); the first limit runs (uncapped trade-through fills) are discarded | a naive 100%-passive VWAP beat VWAP by −3.0 bps in TickSim because any trade-through filled the whole order, however large and however small the print; with the cap the queue model fills 47% of posted shares instead of 72% |

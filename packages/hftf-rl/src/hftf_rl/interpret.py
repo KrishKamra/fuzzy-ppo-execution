@@ -27,7 +27,8 @@ def train_regime_terciles(market: MarketData) -> np.ndarray:
 
 
 def collect(policy: PacePolicy, market: MarketData, cfg: EnvConfig, episodes: Episodes):
-    """Normalised observations, deterministic paces and session ids at every live decision."""
+    """Normalised observations, deterministic actions (pace, or pace and passive fraction) and session ids at
+    every live decision."""
     env = BatchExecutionEnv(market, cfg, n_envs=len(episodes), autoreset=False, randomise_impact=False)
     env.reset(episodes)
     obs, pace, session = [], [], []
@@ -45,10 +46,16 @@ def collect(policy: PacePolicy, market: MarketData, cfg: EnvConfig, episodes: Ep
 def rule_report(policy: PacePolicy, market: MarketData, cfg: EnvConfig, episodes: Episodes) -> list[dict]:
     layer = policy.model.fuzzy
     obs, pace, _ = collect(policy, market, cfg, episodes)
-    share, rule_pace = firing_summary(layer, torch.as_tensor(obs[:, REGIME_SLICE]), pace)
+    x = torch.as_tensor(obs[:, REGIME_SLICE])
+    action = pace.reshape(len(pace), -1)  # (pace,) or (pace, passive fraction) with limit orders
+    share, rule_pace = firing_summary(layer, x, action[:, 0])
     rows = rule_table(layer, train_regime_terciles(market), INPUTS, TERMS)
     for r in rows:
         r["share"], r["pace"] = float(share[r["rule"]]), float(rule_pace[r["rule"]])
+    if action.shape[1] == 2:
+        _, rule_passive = firing_summary(layer, x, action[:, 1])
+        for r in rows:
+            r["passive"] = float(rule_passive[r["rule"]])
     return sorted(rows, key=lambda r: -r["share"])
 
 

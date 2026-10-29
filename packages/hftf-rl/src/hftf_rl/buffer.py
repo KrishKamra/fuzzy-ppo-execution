@@ -7,9 +7,10 @@ import numpy as np
 
 
 class RolloutBuffer:
-    def __init__(self, steps: int, n_envs: int, obs_dim: int) -> None:
+    def __init__(self, steps: int, n_envs: int, obs_dim: int, action_shape: tuple[int, ...] = ()) -> None:
+        """`action_shape` is () for the pace alone, (2,) for pace and passive fraction (limit orders)."""
         self.obs = np.zeros((steps, n_envs, obs_dim), dtype=np.float32)
-        self.u = np.zeros((steps, n_envs), dtype=np.float32)
+        self.u = np.zeros((steps, n_envs, *action_shape), dtype=np.float32)
         self.logp = np.zeros((steps, n_envs), dtype=np.float32)
         self.value = np.zeros((steps, n_envs), dtype=np.float32)
         self.reward = np.zeros((steps, n_envs), dtype=np.float32)

@@ -114,3 +114,47 @@ def test_hard_gate_uses_one_rule_per_decision():
     expected = 1.0 + torch.nn.functional.softplus(own)
     torch.testing.assert_close(dist.concentration1, expected[:, 0])
     assert torch.autograd.grad(dist.mean.sum(), model.fuzzy.centres, allow_unused=True)[0] is None
+
+
+def test_limit_head_starts_at_vwap_pace_and_initial_passive_fraction():
+    from hftf_rl.policies import FuzzyActorCritic
+
+    obs = np.random.default_rng(4).normal(size=(256, 15)).astype(np.float32)
+    for model in (
+        MLPActorCritic(15, [64, 64], 4.0, limit=True, init_passive=0.2),
+        FuzzyActorCritic(15, [64, 64], 4.0, n_rules=4, limit=True, init_passive=0.2),
+    ):
+        a = model.mean_pace(obs)
+        assert a.shape == (256, 2)
+        np.testing.assert_allclose(a.mean(0), [1.0, 0.2], atol=0.05)
+        u, logp, _ = model.sample(obs)
+        assert u.shape == (256, 2) and logp.shape == (256,)  # one joint log-prob per decision
+        dist, _ = model(torch.as_tensor(obs))
+        np.testing.assert_allclose(
+            dist.log_prob(torch.as_tensor(u)).detach().numpy(), logp, rtol=1e-5, atol=1e-5
+        )
+
+
+def test_limit_trainer_runs_for_mlp_and_efnn_and_checkpoints_round_trip(tmp_path):
+    from hftf_rl.config import EFNNConfig, EvolutionSettings
+    from hftf_sim.episodes import EpisodeSampler
+
+    df = synthetic_frame(n_sessions=3)
+    df.loc[df["date"] == df["date"].max(), "split"] = "val"
+    market = MarketData.from_frame(df, stats=STATS)
+    env_cfg = EnvConfig.load()
+    env_cfg.limit.enabled = True
+    efnn = EFNNConfig(evolution=EvolutionSettings(tau_add=0.99, n_min_uncovered=1, cooldown_iters=0))
+    for policy_kind in ("mlp", "fuzzy"):
+        run = tmp_path / policy_kind
+        cfg = PPOConfig(
+            policy=policy_kind, n_envs=8, rollout_steps=40, total_timesteps=8 * 40 * 3, epochs=2,
+            minibatches=2, eval_every=1, eval_episodes=16, torch_threads=1,
+        )  # fmt: skip
+        PPOTrainer(cfg, env_cfg, market, run, efnn=efnn).train(log=lambda *_: None)
+        assert "mean_passive" in (run / "progress.csv").read_text().splitlines()[0]
+        policy, cfg_loaded, ckpt = load_policy(run / "last.pt")
+        assert ckpt["arch"]["limit"] and cfg_loaded.limit.enabled
+        ep = EpisodeSampler(market, cfg_loaded.episode, "val").sample(16, np.random.default_rng(0))
+        summary = evaluate(policy, market, cfg_loaded, ep)
+        assert np.array_equal(summary["executed"], ep.qty) and (summary["passive_frac"] > 0).any()

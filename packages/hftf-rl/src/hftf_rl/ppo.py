@@ -130,6 +130,7 @@ class PPOTrainer:
         dim = self.env.obs_dim
         common = (dim, cfg.trunk.hidden, env_cfg.action.a_max, cfg.trunk.activation)
         common = (*common, cfg.init_pace, cfg.init_concentration)
+        limit = {"limit": env_cfg.limit.enabled, "init_passive": cfg.init_passive}
         self.fuzzy = cfg.policy == "fuzzy"
         if self.fuzzy:
             self.model = FuzzyActorCritic(
@@ -138,6 +139,7 @@ class PPOTrainer:
                 regime_dim=REGIME_SLICE.stop,
                 antecedent_grad=self.efnn.antecedent_grad,
                 gate=self.efnn.gate,
+                **limit,
             )
             if self.efnn.gate == "hard" and self.efnn.evolution.enabled:
                 raise ValueError("gate: hard needs evolution off (merges and adds assume soft firing)")
@@ -149,14 +151,15 @@ class PPOTrainer:
             self.events_path.write_text("iteration,kind,rules,n_rules,accepted,kl,detail\n")
             self.initialised = False
         else:
-            self.model = MLPActorCritic(*common)
+            self.model = MLPActorCritic(*common, **limit)
             groups = [{"params": list(self.model.parameters())}]
         for g in groups:
             g["lr"] = cfg.lr * g.get("lr_scale", 1.0)
         self.opt = torch.optim.Adam(groups, lr=cfg.lr, eps=1e-5)
         self.obs_rms = RunningMeanStd((dim,), passthrough=REGIME_SLICE.stop)
         self.scaler = RewardScaler(cfg.n_envs, cfg.gamma)
-        self.buffer = RolloutBuffer(cfg.rollout_steps, cfg.n_envs, dim)
+        action_shape = (2,) if env_cfg.limit.enabled else ()
+        self.buffer = RolloutBuffer(cfg.rollout_steps, cfg.n_envs, dim, action_shape)
         rng = np.random.default_rng(cfg.eval_seed)
         self.eval_sets = {
             s: EpisodeSampler(market, env_cfg.episode, s).sample(cfg.eval_episodes, rng)
@@ -170,12 +173,11 @@ class PPOTrainer:
     # ---------------------------------------------------------------- rollout
     def collect(self) -> None:
         self.buffer.reset()
-        a_max = self.env_cfg.action.a_max
         for _ in range(self.cfg.rollout_steps):
             self.obs_rms.update(self.obs)
             obs_n = self.obs_rms.normalize(self.obs).astype(np.float32)
             u, logp, value = self.model.sample(obs_n)
-            self.obs, reward, done, info = self.env.step(u * a_max)
+            self.obs, reward, done, info = self.env.step(self.model.to_action(u))
             self.buffer.add(obs_n, u, logp, value, self.scaler(reward, done), done)
             if "final" in info:
                 self.episode_costs.extend(info["final"]["cost_bps"].tolist())
@@ -189,12 +191,12 @@ class PPOTrainer:
         adv, ret = b.gae(self.last_value, cfg.gamma, cfg.gae_lambda)
         flat = {
             "obs": torch.as_tensor(b.obs.reshape(-1, b.obs.shape[-1])),
-            "u": torch.as_tensor(b.u.reshape(-1)),
+            "u": torch.as_tensor(b.u.reshape(-1, *b.u.shape[2:])),
             "logp": torch.as_tensor(b.logp.reshape(-1)),
             "adv": torch.as_tensor(adv.reshape(-1)),
             "ret": torch.as_tensor(ret.reshape(-1)),
         }
-        n = len(flat["u"])
+        n = len(flat["logp"])
         mb = n // cfg.minibatches
         stats: dict[str, list[float]] = {k: [] for k in ("pg_loss", "v_loss", "entropy", "kl", "clipfrac")}
         stop = False
@@ -229,7 +231,10 @@ class PPOTrainer:
         out = {k: float(np.mean(x)) for k, x in stats.items()}
         y, pred = ret.reshape(-1), b.value.reshape(-1)
         out["explained_var"] = float(1 - np.var(y - pred) / (np.var(y) + 1e-8))
-        out["mean_pace"] = float(b.u.mean() * self.env_cfg.action.a_max)
+        u = b.u.reshape(-1, *b.u.shape[2:])
+        out["mean_pace"] = float((u[:, 0] if u.ndim == 2 else u).mean() * self.env_cfg.action.a_max)
+        if u.ndim == 2:
+            out["mean_passive"] = float(u[:, 1].mean())
         out["early_stop"] = float(stop)
         return out
 
@@ -337,9 +342,10 @@ class PPOTrainer:
                         self.best, best_metrics = ev["val_cost"], {"iteration": it, **ev}
                         self._save("best.pt", it, best_metrics)
                     self._save("last.pt", it, ev)
+                    passive = f"passive {row['mean_passive']:.2f} " if "mean_passive" in row else ""
                     log(
                         f"it {it:4d}/{iterations} steps {it * per_iter:>9,} pace {row['mean_pace']:.2f} "
-                        f"kl {row['kl']:.4f} ev {row['explained_var']:.2f} | vs VWAP (bps) "
+                        f"{passive}kl {row['kl']:.4f} ev {row['explained_var']:.2f} | vs VWAP (bps) "
                         f"train {ev['train_vs_vwap']:+.3f}±{ev['train_vs_vwap_se']:.3f} "
                         f"val {ev['val_vs_vwap']:+.3f}±{ev['val_vs_vwap_se']:.3f} "
                         f"| {time.time() - t_start:.0f}s"

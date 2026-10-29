@@ -127,6 +127,14 @@ participation statistics are biased.
 - The probe (`capabilities.json`) reports `bar_history_probe: false` everywhere, yet bars reach back ~140
   days. The probe was wrong, and the data is fine.
 
+### F12. Bars are right-closed on the tick clock (measured 2026-10-29, for TickSim)
+Tick stamps carry sub-second precision. Put on a 1-second grid (second `s` = floor of seconds after
+09:15 IST), the 1-minute bar labelled `m` holds **exactly** the ticks of seconds `60m+1 … 60m+60`. Volume
+matches on 100% of tick minutes (left-closed binning `60m … 60m+59`: 51%), and the bar's closing bid/ask
+equal the tick L1 state at second `60(m+1)` on 100% of minutes (0 mismatches; at second `60m+59`: 28%).
+So the state the agent had seen when deciding at the end of bar `m` is grid row `60(m+1)`, and the tick
+grid and the bars share one clock. → `hftf_data.l1`, `hftf_sim.tick`.
+
 ## Market structure facts measured from this data
 
 | | ADE | ADSEZ | APHS |

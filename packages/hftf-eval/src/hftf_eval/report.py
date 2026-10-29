@@ -14,6 +14,7 @@ from hftf_eval.baselines import VWAP
 from hftf_eval.stats import breakdown, paired_stats
 from hftf_sim.config import EnvConfig
 from hftf_sim.market import MarketData
+from hftf_sim.tick import TickData
 
 LABEL = "regime_eval_prevday"  # previous-day RV tercile: evaluation only, never a model input
 
@@ -33,10 +34,14 @@ def backtest(
     n_episodes: int,
     seed: int,
     labels: pd.DataFrame | None = None,
+    ticks: TickData | None = None,
+    sessions=None,
 ) -> pd.DataFrame:
-    """Long backtest rows for VWAP and every policy on one shared set of episodes (default impact)."""
-    ep = sample_episodes(market, cfg, split, n_episodes, seed)
-    df = pd.concat([run_policy(p, market, cfg, ep) for p in (VWAP(), *policies)], ignore_index=True)
+    """Long backtest rows for VWAP and every policy on one shared set of episodes (default impact). With
+    `ticks` they run in TickSim; `sessions` restricts the episodes (e.g. to the tick sessions)."""
+    ep = sample_episodes(market, cfg, split, n_episodes, seed, sessions)
+    rows = [run_policy(p, market, cfg, ep, ticks=ticks) for p in (VWAP(), *policies)]
+    df = pd.concat(rows, ignore_index=True)
     if labels is not None:
         df = df.merge(labels, on=["security", "date"], how="left")
     return df
@@ -71,13 +76,18 @@ def impact_sweep(
     param: str,
     values: Sequence[float],
     vs: str | None = None,
+    ticks: TickData | None = None,
+    sessions=None,
 ) -> pd.DataFrame:
     """`policy − VWAP` (and `policy − vs`, if given) for each impact setting; episodes are shared across
     settings and policies."""
     rows = []
     names = [p.name for p in policies]
     for v in values:
-        df = backtest(policies, market, with_impact(cfg, **{param: v}), split, n_episodes, seed)
+        df = backtest(
+            policies, market, with_impact(cfg, **{param: v}), split, n_episodes, seed,
+            ticks=ticks, sessions=sessions,
+        )  # fmt: skip
         vwap_cost = df.loc[df["policy"] == "vwap", "cost_bps"].mean()
         tables = [stats_table(df, names)]
         if vs is not None:

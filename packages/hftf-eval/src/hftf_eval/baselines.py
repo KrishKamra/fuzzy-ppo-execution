@@ -39,6 +39,20 @@ class VWAP:
         return env.pace_to_shares(np.ones(env.n))
 
 
+class PassiveVWAP:
+    """Adaptive VWAP that posts a fixed fraction `f` of every child passively at the near touch (limit
+    orders, ARCHITECTURE §4.9): the naive reference for a learned passive fraction."""
+
+    action_space = "pace"
+
+    def __init__(self, fraction: float = 0.5) -> None:
+        self.fraction = fraction
+        self.name = f"vwap_passive{round(fraction * 100)}"
+
+    def __call__(self, env: BatchExecutionEnv) -> np.ndarray:
+        return np.stack([np.ones(env.n), np.full(env.n, self.fraction)], axis=1)
+
+
 class POV:
     """A fixed fraction of the last completed bar's volume (the next bar's volume is not yet known)."""
 

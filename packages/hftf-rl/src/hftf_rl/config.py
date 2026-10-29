@@ -38,6 +38,7 @@ class PPOConfig(BaseModel):
     trunk: TrunkConfig = TrunkConfig()
     init_pace: float = 1.0  # initial mean action: a = 1 is adaptive VWAP
     init_concentration: float = 8.0  # alpha + beta of the initial Beta
+    init_passive: float = 0.2  # initial mean passive fraction (limit orders: env.yaml limit.enabled)
     randomise_impact: bool = True
     eval_every: int = 3  # iterations between deterministic train/val evaluations
     eval_episodes: int = 2000

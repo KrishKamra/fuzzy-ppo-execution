@@ -19,6 +19,31 @@ app.add_typer(train_app, name="train")
 console = Console()
 
 
+def _simulator(market, cfg, split: str, sim: str, tick_sessions: bool, sub_slices: int, latency: int):
+    """(ticks, sessions) for `--sim`: TickSim data (None for BarSim) and the session ids episodes are drawn
+    from (None = all of the split). Applies the TickSim overrides to `cfg` in place."""
+    from hftf_sim import TickData
+
+    if sim not in ("bar", "tick"):
+        raise typer.BadParameter(f"--sim must be bar or tick, got {sim!r}")
+    if sub_slices:
+        cfg.tick.sub_slices = sub_slices
+    if latency >= 0:
+        cfg.tick.latency_s = latency
+    if sim == "bar" and not tick_sessions:
+        return None, None
+    ticks = TickData.load(market, cfg.tick.path)
+    sessions = ticks.session_ids(market, split)
+    if len(sessions) == 0:
+        raise typer.BadParameter(f"no tick sessions in split {split!r}")
+    console.print(
+        f"{'TickSim' if sim == 'tick' else 'BarSim'} on {len(sessions)} tick sessions of {split}"
+        + (f" (latency {cfg.tick.latency_s}s, {cfg.tick.sub_slices} order(s)/decision, depth fills "
+           f"{'on' if cfg.tick.depth_fills else 'off'})" if sim == "tick" else "")
+    )  # fmt: skip
+    return (ticks if sim == "tick" else None), sessions
+
+
 @data_app.command("audit")
 def audit(
     strict: bool = typer.Option(False, help="Exit with code 1 if any readiness check fails."),
@@ -91,12 +116,60 @@ def build_features() -> None:
     )
 
 
+@data_app.command("build-l1")
+def build_l1() -> None:
+    """Build the 1-second L1 grid of every tick session in the final feature table (TickSim input)."""
+    import pandas as pd
+
+    from hftf_data.features import FEATURES_FILE
+    from hftf_data.l1 import L1_FILE, build_l1_table, l1_manifest
+
+    paths = DataPaths()
+    feat = pd.read_parquet(paths.processed / FEATURES_FILE, columns=["security", "date", "split"])
+    df = build_l1_table(feat.drop_duplicates(["security", "date"]), paths)
+    out = paths.processed / L1_FILE
+    df.to_parquet(out, index=False)
+    m = l1_manifest(df)
+    out.with_suffix(".manifest.json").write_text(json.dumps(m, indent=2, default=str))
+    console.print(f"[bold]{out}[/bold]: {len(df):,} rows")
+    console.print(f"sessions by split: {m['sessions_by_split']}")
+    console.print(f"first quote (s after 09:15): {m['first_quote_sec']}; quote age: {m['quote_age_s']}")
+
+
+@eval_app.command("calibrate-limit")
+def calibrate_limit(
+    split: str = typer.Option("val", help="Tick sessions to calibrate on (never test)."),
+    latency: int = typer.Option(-1, help="TickSim latency in seconds (-1 = config)."),
+) -> None:
+    """Fit BarSim's passive-fill θ_touch / θ_through (env.yaml limit) to the TickSim queue model."""
+    from hftf_sim import EnvConfig, MarketData, TickData
+    from hftf_sim.limit import calibrate_touch_fill
+
+    if split == "test":
+        raise typer.BadParameter("calibrating on the test split would leak it into training")
+    cfg = EnvConfig.load()
+    market = MarketData.load(cfg.features_path)
+    ticks = TickData.load(market, cfg.tick.path)
+    lat = cfg.tick.latency_s if latency < 0 else latency
+    out = calibrate_touch_fill(market, ticks, ticks.session_ids(market, split), latency_s=lat)
+    for k, v in out.items():
+        console.print(f"{k:32s} {v:.4f}" if isinstance(v, float) else f"{k:32s} {v:,}")
+    console.print(
+        f"set configs/env.yaml limit.touch_fill_frac: {out['theta_touch']:.4f}, "
+        f"through_fill_frac: {out['theta_through']:.4f}"
+    )
+
+
 @eval_app.command("baselines")
 def eval_baselines(
     split: str = typer.Option("val", help="train | val | test"),
     episodes: int = typer.Option(4000, help="Parent orders, shared by every baseline (paired)."),
     seed: int = typer.Option(0, help="Episode seed."),
     randomise_impact: bool = typer.Option(False, help="Draw impact per episode from the training ranges."),
+    sim: str = typer.Option("bar", help="bar (BarSim) | tick (TickSim: fills at the replayed L1 touch)."),
+    tick_sessions: bool = typer.Option(False, help="Only tick sessions (implied by --sim tick)."),
+    sub_slices: int = typer.Option(0, help="TickSim orders per decision (0 = config)."),
+    latency: int = typer.Option(-1, help="TickSim send-to-fill latency in seconds (-1 = config)."),
 ) -> None:
     """Immediate, TWAP, VWAP, POV10 and Almgren-Chriss on identical episodes (costs in bps of arrival)."""
     import pandas as pd
@@ -109,11 +182,15 @@ def eval_baselines(
 
     cfg = EnvConfig.load()
     market = MarketData.load(cfg.features_path)
-    ep = sample_episodes(market, cfg, split, episodes, seed)
-    rows = [run_policy(p, market, cfg, ep, randomise_impact=randomise_impact) for p in default_baselines()]
+    ticks, sessions = _simulator(market, cfg, split, sim, tick_sessions, sub_slices, latency)
+    ep = sample_episodes(market, cfg, split, episodes, seed, sessions)
+    rows = [
+        run_policy(p, market, cfg, ep, randomise_impact=randomise_impact, ticks=ticks)
+        for p in default_baselines()
+    ]
     table_df = summarize(pd.concat(rows, ignore_index=True))
     table = Table(title=f"Baselines on {split}: {episodes:,} episodes, seed {seed}")
-    heads = ("n", "IS", "IS med", "IS sd", "CVaR95", "fees", "obj", "vs VWAP", "kids")
+    heads = (*("n", "IS", "IS med", "IS sd", "CVaR95", "fees", "obj", "vs VWAP", "kids"), "passive")
     table.add_column("policy")
     for h in heads:
         table.add_column(h, justify="right")
@@ -135,6 +212,9 @@ def train_ppo(
     price_drift: str = typer.Option("", help="Reward: realised | expected (default: env.yaml)."),
     gate: str = typer.Option("", help="Fuzzy only: soft | hard (k-means gate ablation; no evolution)."),
     hold_out: str = typer.Option("", help="Leave this security out of training (and of the scaler)."),
+    limit: bool = typer.Option(
+        False, help="Limit orders: a second action, the passive fraction of each child."
+    ),
 ) -> None:
     """Train PPO (MLP, static fuzzy or eFNN) on the train split; best.pt is picked by val objective."""
     from hftf_data.paths import REPO_ROOT
@@ -156,6 +236,7 @@ def train_ppo(
     if gate:
         efnn.gate = gate
     env_cfg = EnvConfig.load()
+    env_cfg.limit.enabled = env_cfg.limit.enabled or limit
     if price_drift:
         env_cfg.reward.price_drift = price_drift
     keep = None
@@ -179,6 +260,10 @@ def eval_policy(
     episodes: int = typer.Option(4000, help="Parent orders, shared by every policy (paired)."),
     seed: int = typer.Option(1, help="Episode seed (differs from the trainer's eval seed by default)."),
     randomise_impact: bool = typer.Option(False, help="Draw impact per episode from the training ranges."),
+    sim: str = typer.Option("bar", help="bar (BarSim) | tick (TickSim: fills at the replayed L1 touch)."),
+    tick_sessions: bool = typer.Option(False, help="Only tick sessions (implied by --sim tick)."),
+    sub_slices: int = typer.Option(0, help="TickSim orders per decision (0 = config)."),
+    latency: int = typer.Option(-1, help="TickSim send-to-fill latency in seconds (-1 = config)."),
 ) -> None:
     """A trained policy vs the baselines on identical episodes, with the paired difference to VWAP."""
     import pandas as pd
@@ -191,14 +276,17 @@ def eval_policy(
     from hftf_sim import MarketData
 
     policy, cfg, ckpt = load_policy(checkpoint)
-    market = MarketData.load(cfg.features_path)
-    ep = sample_episodes(market, cfg, split, episodes, seed)
+    market = MarketData.load(cfg.features_path, stats=ckpt.get("market_stats"))
+    ticks, sessions = _simulator(market, cfg, split, sim, tick_sessions, sub_slices, latency)
+    ep = sample_episodes(market, cfg, split, episodes, seed, sessions)
     policies = [*default_baselines(), policy]
-    df = pd.concat([run_policy(p, market, cfg, ep, randomise_impact=randomise_impact) for p in policies])
+    df = pd.concat(
+        [run_policy(p, market, cfg, ep, randomise_impact=randomise_impact, ticks=ticks) for p in policies]
+    )
     table_df = summarize(df)
     table = Table(title=f"{checkpoint} (iteration {ckpt.get('iteration')}) on {split}: {episodes:,} episodes")
     table.add_column("policy")
-    for h in ("n", "IS", "IS med", "IS sd", "CVaR95", "fees", "obj", "vs VWAP", "kids"):
+    for h in (*("n", "IS", "IS med", "IS sd", "CVaR95", "fees", "obj", "vs VWAP", "kids"), "passive"):
         table.add_column(h, justify="right")
     for name, r in table_df.iterrows():
         table.add_row(name, *(f"{v:,.0f}" if c == "episodes" else f"{v:.2f}" for c, v in r.items()))
@@ -240,8 +328,18 @@ def eval_rules(
     known = label == label  # drop sessions without a previous-day label (NaN)
     ami = adjusted_mutual_info(rule[known], label[known])
     table = Table(title=f"{checkpoint}: {len(rows)} rules, firing on {split} ({episodes:,} episodes)")
-    for col in ("rule", "IF imbalance", "spread-var", "RV", "THEN pace", "share"):
-        table.add_column(col, justify="right" if col in ("rule", "THEN pace", "share") else "left")
+    passive = "passive" in rows[0]
+    cols = (
+        "rule",
+        "IF imbalance",
+        "spread-var",
+        "RV",
+        "THEN pace",
+        *(("passive",) if passive else ()),
+        "share",
+    )
+    for col in cols:
+        table.add_column(col, justify="left" if col in ("IF imbalance", "spread-var", "RV") else "right")
     for r in rows:
         table.add_row(
             str(r["rule"]),
@@ -249,6 +347,7 @@ def eval_rules(
             f"{r['spread_var_term']} ({r['spread_var_c']:+.2f})",
             f"{r['rv_term']} ({r['rv_c']:+.2f})",
             f"{r['pace']:.2f}",
+            *((f"{r['passive']:.0%}",) if passive else ()),
             f"{r['share']:.1%}",
         )
     console.print(table)
@@ -318,6 +417,10 @@ def eval_compare(
     by_regime: bool = typer.Option(False, help="Break the ensembles down by the eval-only regime label."),
     out: str = typer.Option("", help="Write the backtest rows and tables to runs/reports/<out>_*.csv."),
     security: str = typer.Option("", help="Only this security (e.g. the held-out one of a LOSO run)."),
+    sim: str = typer.Option("bar", help="bar (BarSim) | tick (TickSim: fills at the replayed L1 touch)."),
+    tick_sessions: bool = typer.Option(False, help="Only tick sessions (implied by --sim tick)."),
+    sub_slices: int = typer.Option(0, help="TickSim orders per decision (0 = config)."),
+    latency: int = typer.Option(-1, help="TickSim send-to-fill latency in seconds (-1 = config)."),
 ) -> None:
     """Seed ensembles (and seeds) vs VWAP on fresh paired episodes, with session-cluster bootstrap CIs."""
     from hftf_data.paths import REPO_ROOT
@@ -326,7 +429,9 @@ def eval_compare(
 
     policies, cfg, stats = _load_groups(groups, members)
     market = MarketData.load(cfg.features_path, securities=[security] if security else None, stats=stats)
-    df = backtest(policies, market, cfg, split, episodes, seed, eval_labels(cfg.features_path))
+    ticks, sessions = _simulator(market, cfg, split, sim, tick_sessions, sub_slices, latency)
+    labels = eval_labels(cfg.features_path)
+    df = backtest(policies, market, cfg, split, episodes, seed, labels, ticks=ticks, sessions=sessions)
     names = [p.name for p in policies]
     ensembles = [g.partition("=")[0] for g in groups]
     tables = {"vs_vwap": stats_table(df, names)}
@@ -360,6 +465,10 @@ def eval_robustness(
     seed: int = typer.Option(1, help="Episode seed."),
     out: str = typer.Option("", help="Write runs/reports/<out>.csv."),
     vs: str = typer.Option("", help="Also compare every group against this group."),
+    sim: str = typer.Option("bar", help="bar (BarSim) | tick (TickSim: fills at the replayed L1 touch)."),
+    tick_sessions: bool = typer.Option(False, help="Only tick sessions (implied by --sim tick)."),
+    sub_slices: int = typer.Option(0, help="TickSim orders per decision (0 = config)."),
+    latency: int = typer.Option(-1, help="TickSim send-to-fill latency in seconds (-1 = config)."),
 ) -> None:
     """Ensembles vs VWAP as one impact parameter moves inside and outside the training range."""
     from hftf_data.paths import REPO_ROOT
@@ -368,8 +477,21 @@ def eval_robustness(
 
     policies, cfg, stats = _load_groups(groups, members=False)
     market = MarketData.load(cfg.features_path, stats=stats)
+    ticks, sessions = _simulator(market, cfg, split, sim, tick_sessions, sub_slices, latency)
     grid = [float(v) for v in values.split(",")]
-    table = impact_sweep(policies, market, cfg, split, episodes, seed, param, grid, vs=vs or None)
+    table = impact_sweep(
+        policies,
+        market,
+        cfg,
+        split,
+        episodes,
+        seed,
+        param,
+        grid,
+        vs=vs or None,
+        ticks=ticks,
+        sessions=sessions,
+    )
     console.print(f"training range of {param}: {cfg.impact.randomise.get(param, 'fixed')}")
     cols = [param, "policy", "reference", "vwap_cost", "mean", "lo", "hi", "wilcoxon_p"]
     console.print(table[cols].round(3).to_string(index=False))

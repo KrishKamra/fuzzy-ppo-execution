@@ -61,7 +61,7 @@ identical episodes. This is the only new logic. The API only serialises it.
 | `POST /order` | body: security, date, start time, horizon, side, participation (or "random"), policies, `sim: bar\|tick`. Returns the §3.1 trace for every policy + VWAP/TWAP/AC and a summary row each |
 | `GET /policies/{name}/rules` | rule table (terms, centres, widths, pace, passive, share on val) and the MF parameters for plotting |
 | `GET /runs/{name}` | training curves (`progress.csv`: val vs VWAP, KL, rule count) and structure events (`events.csv`) |
-| `GET /results` | the M4/M5 tables from `runs/reports/*.csv` (ensembles, CIs, regime breakdown, robustness sweep) |
+| `GET /results` | the M4/M5 tables from `runs/reports/*.csv`, computed by `stats_table` / `regime_table`: ensembles vs VWAP with session CI, Holm p and date CI; architecture pairs; breakdowns by regime, security and horizon; robustness sweep; the replication run alongside ours |
 
 Pydantic response models give the frontend a typed contract (exported as OpenAPI, from which TS types are
 generated with `openapi-typescript`). Market data and checkpoints load once at start-up. Tests use FastAPI's
@@ -79,8 +79,12 @@ generated with `openapi-typescript`). Market data and checkpoints load once at s
    rule rendered as a sentence with its pace and passive fraction.
 4. **Learning:** rule count over iterations with add/merge/prune markers, edit KL against the 0.02 guard,
    and val objective vs VWAP with the `best.pt` iteration marked.
-5. **Results:** the headline tables with CIs (M4 val/test, LOSO, M5 TickSim, limit orders), the impact
-   robustness sweep, and the regime breakdown.
+5. **Results:** a forest plot per question (adapted from the replication's figures): ensembles vs VWAP
+   with session CI and date CI side by side, with Holm p next to each; architecture pairs; per-security and
+   per-horizon breakdowns; the impact robustness sweep. A toggle shows **our run vs the independent
+   replication** on the same axes, so the audience sees the result reproduce. A BarSim/TickSim toggle shows
+   the M5 fill-model check, and a limit-orders panel shows the learned policy next to the naive
+   always-passive rule, which is the honest comparison.
 
 ## 4. Milestones
 
@@ -97,7 +101,24 @@ Suggested split for three people: one owns M6a-M6b (Python), one owns M6c and M6
 one owns M6d (fuzzy panel, the course-specific part). The API contract (§3.2) is fixed first so the
 three can work in parallel against mocked JSON.
 
-## 5. Decisions to confirm
+## 5. What the demo claims (and does not)
+
+The UI should say exactly what the evidence supports (docs/RESULTS.md):
+
+| Claim | Evidence | How the UI shows it |
+|---|---|---|
+| PPO with an expected-cost reward beats VWAP, TWAP and Almgren-Chriss out of sample | val and test, two independent runs, Holm and date-cluster checks, LOSO | results screen, both runs toggled |
+| The edge survives replaying fills against the real order book | M5 TickSim, paired with BarSim | BarSim/TickSim toggle on replay and results |
+| The edge is transient-impact management | zero-impact and robustness sweeps | robustness chart; replay shows slower pacing when displacement builds |
+| The fuzzy layer is interpretable and its rules follow execution theory | rule reports for every seed; calm → pace ≥ 1, stressed → pace < 1 | the fuzzy brain panel |
+| eFNN is better than MLP | **not established** (Holm p ≥ 0.32 in both runs) | stated plainly on the architecture plot |
+| Learned limit orders help | **yes**: started at the naive always-passive rule, the agent beats it by 0.43-0.46 bps in both simulators and has a lighter tail (CVaR 69 vs 75); absolute passive gains are an upper bound (counterfactual fills) | limit-orders panel: naive rule vs learned policy on the same order, passive fills marked on the price chart |
+| eFNN beats MLP with limit orders | **no** (−0.03, n.s.) | stated on the panel |
+
+The course story is therefore *interpretable* intelligent execution with honest statistics, not "fuzzy beats
+neural nets". It is also the more defensible story.
+
+## 6. Decisions to confirm
 
 1. **Chart library:** ECharts (rich interaction, handles 360-point series and synchronised panels) is
    recommended over Recharts (simpler, weaker for linked brushing) and Plotly (heavy bundle).

@@ -51,9 +51,21 @@ def _beta_bias(a_max: float, init_pace: float, init_concentration: float) -> tor
     )
 
 
-def _actor_bias(a_max: float, init_pace: float, init_concentration: float, limit: bool, init_passive: float):
+def _actor_bias(
+    a_max: float,
+    init_pace: float,
+    init_concentration: float,
+    limit: bool,
+    init_passive: float,
+    passive_concentration: float | None,
+):
+    """Initial actor bias: the pace Beta, and (limit orders) the passive-fraction Beta, whose concentration
+    defaults to the pace's. A mean near 1 needs a larger one (both Beta parameters must exceed 1)."""
     bias = _beta_bias(a_max, init_pace, init_concentration)
-    return torch.cat([bias, _beta_bias(1.0, init_passive, init_concentration)]) if limit else bias
+    if not limit:
+        return bias
+    conc = init_concentration if passive_concentration is None else passive_concentration
+    return torch.cat([bias, _beta_bias(1.0, init_passive, conc)])
 
 
 class _PaceActorCritic(nn.Module):
@@ -105,6 +117,7 @@ class MLPActorCritic(_PaceActorCritic):
         init_concentration: float = 8.0,
         limit: bool = False,
         init_passive: float = 0.2,
+        passive_concentration: float | None = None,
     ) -> None:
         super().__init__()
         self.arch = {
@@ -116,13 +129,16 @@ class MLPActorCritic(_PaceActorCritic):
             "init_concentration": init_concentration,
             "limit": limit,
             "init_passive": init_passive,
+            "passive_concentration": passive_concentration,
         }
         self.a_max, self.limit = a_max, limit
         self.trunk, n_in = _trunk(obs_dim, hidden, activation)
         self.actor = _layer(n_in, 4 if limit else 2, 0.01)
         self.critic = _layer(n_in, 1, 1.0)
         with torch.no_grad():
-            self.actor.bias.copy_(_actor_bias(a_max, init_pace, init_concentration, limit, init_passive))
+            self.actor.bias.copy_(
+                _actor_bias(a_max, init_pace, init_concentration, limit, init_passive, passive_concentration)
+            )
 
     def forward(self, obs: torch.Tensor) -> tuple[Distribution, torch.Tensor]:
         h = self.trunk(obs)
@@ -160,6 +176,7 @@ class FuzzyActorCritic(_PaceActorCritic):
         gate: str = "soft",
         limit: bool = False,
         init_passive: float = 0.2,
+        passive_concentration: float | None = None,
     ) -> None:
         super().__init__()
         if antecedent_grad not in ("all", "value_only", "none"):
@@ -179,6 +196,7 @@ class FuzzyActorCritic(_PaceActorCritic):
             "gate": gate,
             "limit": limit,
             "init_passive": init_passive,
+            "passive_concentration": passive_concentration,
         }
         self.a_max, self.regime_dim, self.antecedent_grad = a_max, regime_dim, antecedent_grad
         self.gate, self.limit = gate, limit
@@ -186,7 +204,7 @@ class FuzzyActorCritic(_PaceActorCritic):
         n_actor = 4 if limit else 2
         self.fuzzy = FuzzyTSK(regime_dim, n_rules, {"actor": n_actor, "critic": 1}, n_in, width)
         actor, critic = _layer(n_in, n_actor, 0.01), _layer(n_in, 1, 1.0)
-        bias = _actor_bias(a_max, init_pace, init_concentration, limit, init_passive)
+        bias = _actor_bias(a_max, init_pace, init_concentration, limit, init_passive, passive_concentration)
         with torch.no_grad():
             self.fuzzy.actor_W.copy_(actor.weight.expand(n_rules, -1, -1))
             self.fuzzy.actor_b.copy_(bias.expand(n_rules, -1))

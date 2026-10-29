@@ -4,6 +4,12 @@ Episodes drawn from the same (security, date) session share one price path, so t
 correlated. Confidence intervals therefore resample whole sessions (cluster bootstrap), and the Wilcoxon
 signed-rank test runs on per-session mean differences. The per-episode normal CI is kept for reference only:
 it is about half as wide as the cluster CI on val (60 sessions).
+
+Two sensitivity checks (contributed with the independent M4 replication, docs/RESULTS.md):
+  * date clusters: the three stocks share market-wide moves on a date, so resampling whole dates is the more
+    conservative unit (12 test dates is few clusters, so it is a check, not the headline);
+  * the unweighted session-mean t-interval, the estimand the session Wilcoxon test is about.
+A family of comparisons (one table) gets Holm-adjusted Wilcoxon p-values (`holm`).
 """
 
 from __future__ import annotations
@@ -11,11 +17,32 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from scipy.special import gammaln
+from scipy.stats import t as student_t
 from scipy.stats import wilcoxon
 
 
 def session_key(df: pd.DataFrame) -> pd.Series:
     return df["security"].astype(str) + "|" + df["date"].astype(str)
+
+
+def date_key(df: pd.DataFrame) -> pd.Series:
+    return df["date"].astype(str)
+
+
+def holm(p: np.ndarray | list[float]) -> np.ndarray:
+    """Holm-Bonferroni step-down adjusted p-values (family-wise error), in the input order. The running
+    maximum keeps the adjusted values monotone in the raw ones."""
+    p = np.asarray(p, dtype=np.float64)
+    order = np.argsort(p)
+    m = len(p)
+    adjusted = np.minimum(1.0, np.maximum.accumulate(p[order] * (m - np.arange(m))))
+    out = np.empty(m)
+    out[order] = adjusted
+    return out
+
+
+def _wilcoxon(means: np.ndarray) -> float:
+    return float(wilcoxon(means).pvalue) if np.any(means != 0) else 1.0
 
 
 def cluster_bootstrap_ci(
@@ -34,24 +61,36 @@ def paired_stats(
     df: pd.DataFrame, policy: str, reference: str, col: str = "cost_bps", n_boot: int = 4000, seed: int = 0
 ) -> dict[str, float]:
     """`policy − reference` on identical episodes: mean, session-cluster bootstrap CI, Wilcoxon p on
-    session means, per-episode normal CI, episode win rate and the number of sessions."""
+    session means, per-episode normal CI, episode win rate and the number of sessions; plus the date-cluster
+    CI and Wilcoxon p and the unweighted session-mean t-interval (sensitivity checks)."""
     wide = df.pivot(index="episode", columns="policy", values=col)
     keys = df.loc[df["policy"] == reference].set_index("episode").loc[wide.index]
-    clusters = session_key(keys).to_numpy()
+    clusters, dates = session_key(keys).to_numpy(), date_key(keys).to_numpy()
     d = (wide[policy] - wide[reference]).to_numpy()
     mean, se = float(d.mean()), float(d.std(ddof=1) / np.sqrt(len(d)))
     lo, hi = cluster_bootstrap_ci(d, clusters, n_boot, seed)
+    date_lo, date_hi = cluster_bootstrap_ci(d, dates, n_boot, seed)
     per_session = pd.Series(d).groupby(clusters).mean().to_numpy()
-    p = float(wilcoxon(per_session).pvalue) if np.any(per_session != 0) else 1.0
+    per_date = pd.Series(d).groupby(dates).mean().to_numpy()
+    k = len(per_session)
+    half = (
+        float(student_t.ppf(0.975, k - 1) * per_session.std(ddof=1) / np.sqrt(k)) if k > 1 else float("nan")
+    )
     return {
         "mean": mean,
         "lo": lo,
         "hi": hi,
-        "wilcoxon_p": p,
+        "wilcoxon_p": _wilcoxon(per_session),
         "naive_lo": mean - 1.96 * se,
         "naive_hi": mean + 1.96 * se,
         "win": float((d < 0).mean()),
-        "sessions": len(per_session),
+        "sessions": k,
+        "date_lo": date_lo,
+        "date_hi": date_hi,
+        "date_wilcoxon_p": _wilcoxon(per_date),
+        "dates": len(per_date),
+        "session_t_lo": float(per_session.mean()) - half,
+        "session_t_hi": float(per_session.mean()) + half,
     }
 
 

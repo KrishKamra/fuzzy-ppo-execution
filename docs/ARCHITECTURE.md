@@ -184,7 +184,7 @@ With `limit.enabled` (`hftf train ppo --limit`), the action is `(a, f)`: the pac
 `f ∈ [0, 1]` of the child, from a second, independent Beta head (MLP and fuzzy TSK heads alike). Each decision
 posts `⌊f·q⌋` at the near touch (bid for a buy) and sends the rest aggressively. The passive order rests
 until the end of the bar, and the unfilled part is cancelled and returns to the inventory (the schedule
-re-plans it). The forced last step is all aggressive. A passive fill pays the limit price shifted by our
+re-plans it). The forced last step is all aggressive. **Dead zone** (`limit.dead_zone` = 0.1): a fraction ≤ 0.1 snaps to 0 and ≥ 0.9 to 1, so a child can be a single order of either kind (a Beta never reaches 0 or 1 exactly, and every mixed child pays the per-order fee twice). A passive fill pays the limit price shifted by our
 transient displacement, with no spread, no temporary impact and no kick, plus fees. Each non-empty passive
 or aggressive order pays the per-order fee. `hftf_sim.limit` holds both fill models:
 - **BarSim (all days, used for training):** the decision's quote against the fill bar's trade range. If the
@@ -296,6 +296,9 @@ include the fuzzy structure (R varies).
   bootstrap resamples whole (security, date) sessions, because episodes on one session share a price path; on
   val (60 sessions) this CI is about 2× the per-episode one. Wilcoxon runs on per-session mean differences.
   Policies are reported as **seed ensembles** (mean pace of the seeds' `best.pt`), with every seed listed too.
+  **Added after the M4 replication:** Wilcoxon p-values are Holm-adjusted over the family of ensemble
+  claims in a table, and every comparison also reports a date-cluster CI and Wilcoxon test (stocks share
+  market moves on a date) and the unweighted session-mean t-interval, as sensitivity checks.
 - **Leave-one-stock-out (as built):** `hftf train ppo --hold-out SEC` trains and fits the observation scaler on
   the other two names. The checkpoint stores the scaler, and `hftf eval compare --security SEC` evaluates on
   the unseen name.
@@ -332,7 +335,7 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 | **M2** ✅ | PPO-MLP | beats VWAP on train; val gap reported |
 | **M3** ✅ | static fuzzy → evolving fuzzy | rule add/merge/prune logged; no PPO instability at edits (KL spikes < target) |
 | **M4** ✅ | experiments, ablations, robustness, report | paired stats tables, regime breakdowns, rule narratives |
-| **M5** | TickSim (§4.8) and limit orders (§4.9) on the frozen data (full-universe data dropped: the pull is frozen) | M4 policies re-evaluated in TickSim with paired BarSim-TickSim gaps; limit-order head evaluated on tick sessions |
+| **M5** ✅ | TickSim (§4.8) and limit orders (§4.9) on the frozen data (full-universe data dropped: the pull is frozen) | M4 policies re-evaluated in TickSim with paired BarSim-TickSim gaps; limit-order head evaluated on tick sessions |
 | **M6** | demo backend (`apps/api`) and frontend (`web/`): see `docs/DEMO_PLAN.md` | a real order replays end to end with the fuzzy reasoning visible |
 
 ## 10. Key risks
@@ -373,3 +376,6 @@ dependency on `sim`, so it stays reusable as a standalone torch module.
 | 2026-10-29 | TickSim fill: one order per decision at the bar boundary + 1 s, half spread only within displayed depth, BarSim's square-root walk on the excess; the bar/tick clock alignment comes from the data (bar `m` = seconds 60m+1…60m+60) | the measured gap to BarSim is entirely depth (−0.32 bps for VWAP; timing −0.004, n.s.), which validates BarSim's end-of-bar fill; 4 orders per decision cost +2.8 bps in per-order fees, so sub-minute slicing is a sensitivity option, not the default |
 | 2026-10-29 | Limit orders: a passive-fraction action with a second Beta head; policies train in BarSim with a bar-range fill rule whose θ is fitted to a TickSim queue model on the val tick sessions, and are evaluated in TickSim with the queue model | train has no ticks, so training on tick days would spend val or test; the bar rule is causal (decision quote vs the next bar's range) and calibrated without touching test; a continuous fraction keeps PPO's log-probabilities simple and nests the pace-only policy at f = 0 |
 | 2026-10-29 | Passive fills are capped by the volume that traded at or through our price (two calibrated BarSim caps, θ_touch and θ_through); the first limit runs (uncapped trade-through fills) are discarded | a naive 100%-passive VWAP beat VWAP by −3.0 bps in TickSim because any trade-through filled the whole order, however large and however small the print; with the cap the queue model fills 47% of posted shares instead of 72% |
+| 2026-10-29 | Holm-adjusted p-values over each table's ensemble claims, plus date-cluster CIs/tests and the unweighted session t-interval, in every `eval compare` table; an independent 3-seed M4 replication is in RESULTS | three architectures tested against VWAP and each other is a family of claims; same-date sessions of different stocks are correlated; the replication confirmed the VWAP result in both runs and showed the architecture differences do not survive the correction |
+| 2026-10-29 | Passive-fraction dead zone (`limit.dead_zone` = 0.1): fractions within 0.1 of 0 or 1 snap to it | the first limit policies settled at f ≈ 0.6, where every child is two orders and pays the ₹20 fee twice (+0.6-0.7 bps over VWAP); a continuous Beta cannot reach the single-order corners, so the reward had a cliff at f = 1 that gradient ascent could not cross |
+| 2026-10-29 | Limit-order runs start the passive head at the naive always-passive rule (`init_passive` 0.95, `passive_concentration` 30) | from 0.2, PPO settled in a mixed-order local optimum 1.2-1.4 bps behind the naive rule; started at it, every seed improves on it (−0.43 to −0.46 bps in both simulators) with a lighter tail, as the pace head improves on VWAP from a = 1 |

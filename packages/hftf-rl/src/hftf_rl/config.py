@@ -39,6 +39,9 @@ class PPOConfig(BaseModel):
     init_pace: float = 1.0  # initial mean action: a = 1 is adaptive VWAP
     init_concentration: float = 8.0  # alpha + beta of the initial Beta
     init_passive: float = 0.2  # initial mean passive fraction (limit orders: env.yaml limit.enabled)
+    # alpha + beta of the initial passive-fraction Beta (None: init_concentration). Starting at the naive
+    # always-passive rule (init_passive 0.95) needs about 30, so that both Beta parameters exceed 1.
+    passive_concentration: float | None = None
     randomise_impact: bool = True
     eval_every: int = 3  # iterations between deterministic train/val evaluations
     eval_episodes: int = 2000

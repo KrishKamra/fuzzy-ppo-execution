@@ -11,7 +11,7 @@ import pandas as pd
 from hftf_data.paths import REPO_ROOT
 from hftf_eval.backtest import Policy, run_policy, sample_episodes
 from hftf_eval.baselines import VWAP
-from hftf_eval.stats import breakdown, paired_stats
+from hftf_eval.stats import breakdown, holm, paired_stats
 from hftf_sim.config import EnvConfig
 from hftf_sim.market import MarketData
 from hftf_sim.tick import TickData
@@ -47,16 +47,32 @@ def backtest(
     return df
 
 
-def stats_table(df: pd.DataFrame, policies: Sequence[str], reference: str = "vwap", **kwargs) -> pd.DataFrame:
-    """One row per policy: `policy − reference` objective with the session-cluster CI and Wilcoxon p."""
-    return pd.DataFrame(
+def stats_table(
+    df: pd.DataFrame,
+    policies: Sequence[str],
+    reference: str = "vwap",
+    family: Sequence[str] | None = None,
+    **kwargs,
+) -> pd.DataFrame:
+    """One row per policy: `policy − reference` objective with the session- and date-cluster CIs and
+    Wilcoxon p-values. The `family` rows (default: all) are the claims tested together, so their p-values
+    are also Holm-adjusted (`holm_p`, `date_holm_p`; NaN outside the family, e.g. single seeds)."""
+    table = pd.DataFrame(
         [{"policy": p, "reference": reference, **paired_stats(df, p, reference, **kwargs)} for p in policies]
     )
+    if len(table):
+        fam = table["policy"].isin(policies if family is None else family).to_numpy()
+        for raw, adj in (("wilcoxon_p", "holm_p"), ("date_wilcoxon_p", "date_holm_p")):
+            table[adj] = float("nan")
+            if fam.any():
+                table.loc[fam, adj] = holm(table.loc[fam, raw])
+    return table
 
 
 def regime_table(
     df: pd.DataFrame, policies: Sequence[str], reference: str = "vwap", by: str = LABEL
 ) -> pd.DataFrame:
+    """`policy − reference` within each value of `by`: the eval-only regime label, security, horizon, side."""
     parts = [breakdown(df, p, reference, by).assign(policy=p, reference=reference) for p in policies]
     return pd.concat(parts, ignore_index=True)
 

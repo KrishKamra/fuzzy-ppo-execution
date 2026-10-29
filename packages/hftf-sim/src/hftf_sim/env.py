@@ -253,6 +253,8 @@ class BatchExecutionEnv:
         post = np.zeros(self.n)
         if passive is not None:  # never on the forced last step: the residual must complete
             forced = self.k == ep.horizon - 1
+            dz = self.cfg.limit.dead_zone  # snap near-0 / near-1 fractions: one order, one fee
+            passive = np.where(passive <= dz, 0.0, np.where(passive >= 1.0 - dz, 1.0, passive))
             post = np.where(live & ~forced, np.floor(passive * q), 0.0)
         q_aggr = q - post
         self.disp = np.where(self.k > 0, self.disp * decay, 0.0)

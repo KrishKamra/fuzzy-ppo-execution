@@ -18,6 +18,8 @@ seed: 0
 total_timesteps: 6000000
 init_pace: 1.0             # initial mean pace: the untrained policy is a noisy adaptive VWAP
 init_concentration: 8.0    # alpha + beta of the initial Beta
+init_passive: 0.95         # limit orders (`train ppo --limit`): the passive head starts at the naive always-passive rule
+passive_concentration: 30.0  # alpha + beta of the initial passive Beta (a mean of 0.95 needs > 20)
 randomise_impact: true     # domain randomisation during training (env.yaml impact.randomise)
 eval_every: 3              # iterations between deterministic train/val evaluations vs VWAP
 eval_episodes: 2000        # fixed, paired episodes per split

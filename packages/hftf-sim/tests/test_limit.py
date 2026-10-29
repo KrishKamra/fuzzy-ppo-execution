@@ -94,3 +94,14 @@ def test_passive_orders_conserve_shares_and_mark_to_market_telescopes(tick):
     assert (env.remaining == 0).all() and passive.sum() > 0
     np.testing.assert_allclose(s["passive_frac"], passive / ep.qty)
     np.testing.assert_allclose(-ret, s["is_bps"], rtol=1e-9, atol=1e-9)
+
+
+@pytest.mark.parametrize(("fraction", "posted"), [(0.05, 0), (0.1, 0), (0.5, 50), (0.9, 100), (0.95, 100)])
+def test_dead_zone_snaps_the_passive_fraction_to_one_order(fraction, posted):
+    _, mk = _market()
+    cfg = EnvConfig.load()
+    assert cfg.limit.dead_zone == 0.1
+    env = BatchExecutionEnv(mk, cfg, fees=FeeModel.zero(), n_envs=1, autoreset=False, randomise_impact=False)
+    env.reset(fixed_episodes(1, horizon=30, qty=3000.0))
+    _, _, _, info = env.step(np.array([[1.0, fraction]]))  # a 100-share child
+    assert info["posted"][0] == posted

@@ -61,6 +61,11 @@ class MarketData:
         path = REPO_ROOT / "data/processed/features_1m_v3.parquet" if path is None else Path(path)
         if not path.is_absolute():
             path = REPO_ROOT / path
+        if not path.exists():
+            raise FileNotFoundError(
+                f"feature table not found at {path}; build it with `uv run hftf data build-features` "
+                "(needs the licensed Bloomberg pull in data/is2/)"
+            )
         cols = ["security", "date", "mso", "split", *REGIME_COLUMNS, *MARKET_COLUMNS, *FILL_COLUMNS]
         df = pd.read_parquet(path, columns=list(dict.fromkeys(cols)))
         if securities is not None:

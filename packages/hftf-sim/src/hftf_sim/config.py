@@ -67,6 +67,9 @@ class LimitConfig(BaseModel):
     # (`hftf eval calibrate-limit`).
     touch_fill_frac: float = 0.05
     through_fill_frac: float = 0.2
+    # Passive fractions within `dead_zone` of 0 or 1 snap to it, so a child can be a single order of either
+    # kind. Without it a Beta never reaches 0 or 1 exactly and every child pays the per-order fee twice.
+    dead_zone: float = Field(0.1, ge=0.0, lt=0.5)
 
 
 class EnvConfig(BaseModel):

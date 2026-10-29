@@ -215,6 +215,10 @@ def train_ppo(
     limit: bool = typer.Option(
         False, help="Limit orders: a second action, the passive fraction of each child."
     ),
+    init_passive: float = typer.Option(
+        -1.0, help="Limit orders: initial mean passive fraction (-1 = config)."
+    ),
+    passive_concentration: float = typer.Option(0.0, help="Initial passive Beta alpha + beta (0 = config)."),
 ) -> None:
     """Train PPO (MLP, static fuzzy or eFNN) on the train split; best.pt is picked by val objective."""
     from hftf_data.paths import REPO_ROOT
@@ -229,6 +233,10 @@ def train_ppo(
         cfg.seed = seed
     if policy:
         cfg.policy = policy
+    if init_passive >= 0:
+        cfg.init_passive = init_passive
+    if passive_concentration > 0:
+        cfg.passive_concentration = passive_concentration
     efnn = EFNNConfig.load()
     efnn.evolution.enabled = evolve
     if antecedent_grad:
@@ -393,15 +401,24 @@ def _print_stats(table, title: str) -> None:
     from rich.table import Table
 
     ref = table["reference"].iloc[0]
-    t = Table(title=f"{title}: policy - {ref} (bps), 95% CI over {table['sessions'].iloc[0]} sessions")
-    for col in ("policy", "diff", "CI", "Wilcoxon p", "win"):
+    n_s, n_d = table["sessions"].iloc[0], table["dates"].iloc[0]
+    t = Table(title=f"{title}: policy - {ref} (bps), 95% CIs over {n_s} sessions / {n_d} dates")
+    for col in ("policy", "diff", "session CI", "Wilcoxon p", "Holm p", "date CI", "date Holm p", "win"):
         t.add_column(col, justify="left" if col == "policy" else "right", no_wrap=True)
+
+    def p(x: float) -> str:
+        return "" if x != x else f"{x:.3f}"  # NaN: not in the Holm family (a single seed)
+
     for _, r in table.iterrows():
         t.add_row(
-            r["policy"], f"{r['mean']:+.3f}", f"({r['lo']:+.3f}, {r['hi']:+.3f})",
-            f"{r['wilcoxon_p']:.3f}", f"{r['win']:.0%}",
+            r["policy"], f"{r['mean']:+.3f}", f"({r['lo']:+.3f}, {r['hi']:+.3f})", p(r["wilcoxon_p"]),
+            p(r["holm_p"]), f"({r['date_lo']:+.3f}, {r['date_hi']:+.3f})", p(r["date_holm_p"]),
+            f"{r['win']:.0%}",
         )  # fmt: skip
     console.print(t)
+    console.print(
+        "Holm: family-wise adjustment over the seed ensembles of this table; date CI: sensitivity check"
+    )
 
 
 @eval_app.command("compare")
@@ -415,6 +432,9 @@ def eval_compare(
     members: bool = typer.Option(True, help="Also evaluate every seed alone, not only the seed ensemble."),
     vs: str = typer.Option("", help="Also compare every group's ensemble against this group's ensemble."),
     by_regime: bool = typer.Option(False, help="Break the ensembles down by the eval-only regime label."),
+    by: str = typer.Option(
+        "", help="Also break the ensembles down by: security, horizon, side (comma list)."
+    ),
     out: str = typer.Option("", help="Write the backtest rows and tables to runs/reports/<out>_*.csv."),
     security: str = typer.Option("", help="Only this security (e.g. the held-out one of a LOSO run)."),
     sim: str = typer.Option("bar", help="bar (BarSim) | tick (TickSim: fills at the replayed L1 touch)."),
@@ -422,7 +442,8 @@ def eval_compare(
     sub_slices: int = typer.Option(0, help="TickSim orders per decision (0 = config)."),
     latency: int = typer.Option(-1, help="TickSim send-to-fill latency in seconds (-1 = config)."),
 ) -> None:
-    """Seed ensembles (and seeds) vs VWAP on fresh paired episodes, with session-cluster bootstrap CIs."""
+    """Seed ensembles (and seeds) vs VWAP on fresh paired episodes: session-cluster bootstrap CIs and Wilcoxon
+    tests, Holm-adjusted over the ensembles, with date-cluster CIs as a sensitivity check."""
     from hftf_data.paths import REPO_ROOT
     from hftf_eval.report import backtest, eval_labels, regime_table, stats_table
     from hftf_sim import MarketData
@@ -434,16 +455,21 @@ def eval_compare(
     df = backtest(policies, market, cfg, split, episodes, seed, labels, ticks=ticks, sessions=sessions)
     names = [p.name for p in policies]
     ensembles = [g.partition("=")[0] for g in groups]
-    tables = {"vs_vwap": stats_table(df, names)}
+    tables = {"vs_vwap": stats_table(df, names, family=ensembles)}
     if vs:
         tables["vs_group"] = stats_table(df, [e for e in ensembles if e != vs], reference=vs)
     for table in tables.values():
         _print_stats(table, f"{split}, {episodes:,} episodes")
-    if by_regime:
-        tables["regime"] = regime_table(df, ensembles)
-        console.print(
-            tables["regime"][["policy", "regime_eval_prevday", "episodes", "mean", "lo", "hi"]].round(3)
-        )
+    breakdowns = (["regime_eval_prevday"] if by_regime else []) + [
+        b.strip() for b in by.split(",") if b.strip()
+    ]
+    for col in breakdowns:
+        if col not in df.columns:
+            raise typer.BadParameter(f"cannot break down by {col!r}")
+        key = "regime" if col == "regime_eval_prevday" else f"by_{col}"
+        tables[key] = regime_table(df, ensembles, by=col)
+        cols = ["policy", col, "episodes", "mean", "lo", "hi", "wilcoxon_p"]
+        console.print(tables[key][cols].round(3).to_string(index=False))
     if out:
         base = REPO_ROOT / "runs" / "reports"
         base.mkdir(parents=True, exist_ok=True)

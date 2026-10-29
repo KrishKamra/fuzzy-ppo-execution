@@ -158,3 +158,21 @@ def test_limit_trainer_runs_for_mlp_and_efnn_and_checkpoints_round_trip(tmp_path
         ep = EpisodeSampler(market, cfg_loaded.episode, "val").sample(16, np.random.default_rng(0))
         summary = evaluate(policy, market, cfg_loaded, ep)
         assert np.array_equal(summary["executed"], ep.qty) and (summary["passive_frac"] > 0).any()
+
+
+def test_passive_head_can_start_at_the_naive_always_passive_rule():
+    import pytest
+
+    from hftf_rl.policies import FuzzyActorCritic
+
+    obs = np.random.default_rng(5).normal(size=(512, 15)).astype(np.float32)
+    kw = dict(limit=True, init_passive=0.95, passive_concentration=30.0)
+    for model in (
+        MLPActorCritic(15, [64, 64], 4.0, **kw),
+        FuzzyActorCritic(15, [64, 64], 4.0, n_rules=4, **kw),
+    ):
+        np.testing.assert_allclose(model.mean_pace(obs).mean(0), [1.0, 0.95], atol=0.03)
+        u, _, _ = model.sample(obs)
+        assert (u[:, 1] >= 0.9).mean() > 0.85  # most initial children are a single passive order
+    with pytest.raises(ValueError):  # the shared concentration (8) cannot put the mean at 0.95
+        MLPActorCritic(15, [64, 64], 4.0, limit=True, init_passive=0.95)

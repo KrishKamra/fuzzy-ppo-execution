@@ -130,7 +130,11 @@ class PPOTrainer:
         dim = self.env.obs_dim
         common = (dim, cfg.trunk.hidden, env_cfg.action.a_max, cfg.trunk.activation)
         common = (*common, cfg.init_pace, cfg.init_concentration)
-        limit = {"limit": env_cfg.limit.enabled, "init_passive": cfg.init_passive}
+        limit = {
+            "limit": env_cfg.limit.enabled,
+            "init_passive": cfg.init_passive,
+            "passive_concentration": cfg.passive_concentration,
+        }
         self.fuzzy = cfg.policy == "fuzzy"
         if self.fuzzy:
             self.model = FuzzyActorCritic(

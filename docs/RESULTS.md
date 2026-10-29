@@ -437,3 +437,157 @@ In BarSim (the training simulator) the limit policies are −0.91 vs VWAP and �
 - **Model caveats:** our resting order does not change the historical prints (no queue displacement of
   other traders), and conflated ~1 s snapshots make the queue position approximate. The always-passive
   advantage (−1.9 bps) is therefore an upper bound on what passive execution is worth here, not an estimate.
+
+## M4 replication and stricter statistics (2026-10-29)
+
+An independent replication of M4 by a team member (Dhanya Hariya): the same code (commit `799cbcd`)
+retrained from scratch, 3 seeds per architecture, evaluated on the test split with a different episode seed
+(42, 4,000 episodes). It is a **second use of the test split**, as a replication: nothing was selected on it.
+Their per-episode results were re-analysed here with the same code as ours. Their analysis also brought
+three checks that are now part of `hftf_eval.stats` and `hftf eval compare`:
+- **Holm-Bonferroni** adjustment over the family of claims in a table (the seed ensembles);
+- **date-cluster** CIs and Wilcoxon tests. The three stocks share market-wide moves on a date, so resampling
+  whole dates is more conservative than resampling stock-sessions. With 12 test dates it is a sensitivity
+  check, not the headline;
+- the **unweighted session-mean t-interval**, the estimand the session Wilcoxon test is about.
+
+```bash
+uv run hftf eval compare mlp='runs/m4_mlp_s*/best.pt' anfis='runs/m4_anfis_s*/best.pt' \
+    efnn='runs/m4_efnn_s*/best.pt' --split test --vs mlp --by security,horizon
+```
+
+### Test split: ensemble − VWAP (bps); session-cluster CI, Holm-adjusted session Wilcoxon p, date-cluster CI
+
+| policy | ours: 5 seeds, episode seed 1 | Holm p | date CI | replication: 3 seeds, episode seed 42 | Holm p | date CI |
+|---|---|---|---|---|---|---|
+| PPO-MLP | −0.160 (−0.263, −0.060) | 0.005 | (−0.230, −0.091) | −0.136 (−0.271, −0.007) | 0.074 | (−0.222, −0.053) |
+| PPO-ANFIS | −0.244 (−0.375, −0.129) | 0.002 | (−0.381, −0.113) | −0.195 (−0.354, −0.049) | 0.059 | (−0.316, −0.082) |
+| PPO-eFNN | −0.222 (−0.334, −0.121) | 0.002 | (−0.314, −0.138) | −0.237 (−0.436, −0.067) | **0.018** | (−0.371, −0.119) |
+
+### Architectures (Holm over the three pairs)
+
+| pair | ours | Holm p | replication | Holm p |
+|---|---|---|---|---|
+| eFNN − MLP | −0.062 (−0.129, −0.001) | 0.453 | −0.101 (−0.212, −0.009) | 0.324 |
+| ANFIS − MLP | −0.083 (−0.174, −0.006) | 0.357 | −0.060 (−0.154, +0.024) | 1.000 |
+| eFNN − ANFIS | +0.022 (−0.050, +0.094) | 0.834 | −0.041 (−0.154, +0.050) | 1.000 |
+
+### By security (ensemble − VWAP, bps)
+
+| security | ours MLP / ANFIS / eFNN | replication MLP / ANFIS / eFNN |
+|---|---|---|
+| ADE | −0.19 / −0.30 / −0.32 | −0.34 / −0.50 / −0.58 |
+| ADSEZ | −0.22 / −0.33 / −0.23 | −0.05 / −0.10 / −0.06 |
+| APHS | −0.08 / −0.11 / −0.12 | −0.01 / +0.01 / −0.07 |
+
+### Reading
+
+- **The M4 result replicates.** Retrained independently with fewer seeds and evaluated on different
+  episodes, every ensemble beats VWAP by 0.14-0.24 bps, and every date-cluster CI excludes 0 in both runs.
+  With 5 seeds, all three survive Holm; with 3, eFNN does (0.018) and ANFIS/MLP are borderline (0.059/0.074).
+  More seeds per ensemble buys significance, as M4 argued.
+- **Architecture differences are not established.** After Holm, every pairwise p is ≥ 0.32 in both runs.
+  This replaces the M4 wording that the fuzzy ensembles were "suggestively" ahead of MLP on test. The
+  replication also notes that eFNN's seed-to-seed spread (0.116 bps) exceeds the eFNN − MLP gap (0.101), and
+  that non-significance is not equivalence (that would need an equivalence test with a prespecified margin).
+- **No single stock drives the result.** The replication's report attributed the edge to ADE; in our run
+  ADSEZ contributes as much. What holds in both is that **APHS gains least**: it has the highest price, the
+  lowest ADV and the smallest touch (74 shares). A causal story about which stocks benefit needs more than
+  12 test dates.
+- Corrections to the replication's written report (its numbers are right): horizons are {30, 60, 120} min,
+  not {15, 30, 60}; `Q` is 1-20% of expected horizon volume, not of ADV; η is the *temporary* impact; VWAP
+  crosses the spread every minute, so it is not a passive benchmark; and its Holm step-down lacked the
+  running maximum (eFNN − ANFIS is 1.000, not 0.681).
+
+## M5 (part 3): the passive-fraction dead zone (2026-10-29)
+
+Fix for the fee cliff of part 2: fractions ≤ 0.1 snap to 0 and ≥ 0.9 to 1 (`limit.dead_zone`), so a child can
+be one order of either kind. Retrained 3 seeds × {MLP, eFNN} (`m5_ldz_*`), otherwise unchanged. Same val tick
+episodes as part 2; the part-2 runs are re-evaluated without the dead zone, as they were trained.
+
+```bash
+uv run hftf train ppo --run m5_ldz_mlp_s0 --policy mlp --seed 0 --limit     # dead zone from env.yaml
+```
+
+| TickSim, val tick sessions | cost | − VWAP | fees | passive share | CVaR95 IS |
+|---|---|---|---|---|---|
+| VWAP | 16.28 | | 12.18 | 0 | 68.6 |
+| VWAP, 100% passive (naive) | 14.39 | −1.895 (−2.294, −1.473) | 11.92 | 82% | 75.0 |
+| PPO-MLP / PPO-eFNN (pace only) | 16.07 / 16.08 | −0.207 / −0.200 | 12.18 | 0 | 67.4 / 66.8 |
+| limit-MLP, no dead zone (part 2) | 15.89 | −0.391 (−0.669, −0.112) | 12.85 | 58% | 77.8 |
+| **limit-MLP, dead zone** | **15.57** | **−0.715** (−1.032, −0.390) | 12.51 | 53% | 81.4 |
+| limit-eFNN, no dead zone (part 2) | 15.89 | −0.391 (−0.684, −0.085) | 12.78 | 56% | 79.6 |
+| limit-eFNN, dead zone | 15.80 | −0.476 (−0.772, −0.188) | 12.55 | 43% | 78.0 |
+
+| paired, TickSim | diff (session CI) | date CI |
+|---|---|---|
+| limit-MLP: dead zone − none | **−0.324** (−0.484, −0.149) | (−0.517, −0.133) |
+| limit-eFNN: dead zone − none | −0.085 (−0.215, +0.036) | (−0.202, +0.011) |
+| limit-MLP (dead zone) − pace-only MLP | **−0.508** (−0.830, −0.161), p 0.005 | (−0.911, −0.125) |
+| limit-eFNN (dead zone) − pace-only eFNN | −0.277 (−0.584, +0.067), p 0.042 | (−0.645, +0.088) |
+| limit-eFNN − limit-MLP | +0.238 (+0.082, +0.389) | (+0.092, +0.384) |
+| limit-MLP − naive 100% passive | +1.180 (+0.845, +1.488) | (+0.750, +1.601) |
+
+In BarSim (the training simulator) the dead-zone limit-MLP is −1.22 vs VWAP, and the naive rule −2.67.
+
+### Reading
+
+- **The dead zone works for the MLP:** −0.32 bps from fewer double-fee children (fees 12.85 → 12.51). Its
+  limit policy is now **significantly better than its pace-only policy** (−0.51 bps, both CIs exclude 0),
+  so learned limit orders now add value over pacing alone.
+- **It barely helps the eFNN** (−0.09, n.s.), which now trails the limit-MLP by 0.24 bps. With the larger
+  action head, the fuzzy policy's rules move the passive fraction less (43% passive vs 53%).
+- **Both still lose to the naive always-passive rule by 1.2-1.4 bps, and the gap is as large in BarSim.**
+  This is an optimisation problem, not a simulator mismatch: the policies keep mixing order types, so
+  fees stay above VWAP's while always-passive lowers them. **Next step:** start the passive head at the naive
+  rule (`init_passive` ≈ 0.95), as the pace head starts at VWAP, so PPO improves on it instead of having
+  to find it. Learned limit orders also widen the tail (CVaR95 78-81 vs 67-69) because unfilled shares wait
+  while the price moves.
+
+## M5 (part 4): starting the passive head at the naive rule (2026-10-29)
+
+Part 3 left an optimisation gap: the learned limit policies lost to the naive always-passive VWAP by 1.2-1.4
+bps in both simulators. As the pace head starts at VWAP (a = 1), the passive head now starts at the naive rule:
+mean 0.95 with its own concentration of 30 (`--init-passive 0.95 --passive-concentration 30`), so almost every
+initial child is a single passive order (dead zone ≥ 0.9). PPO then improves on the rule instead of having to
+find it. 3 seeds × {MLP, eFNN} (`m5_lip_*`); same val tick episodes as parts 2-3.
+
+```bash
+uv run hftf train ppo --run m5_lip_efnn_s0 --policy fuzzy --seed 0 --limit --init-passive 0.95 \
+    --passive-concentration 30
+```
+
+| val tick sessions | BarSim cost | TickSim cost | − VWAP, TickSim | fees | passive share | CVaR95 IS (TickSim) |
+|---|---|---|---|---|---|---|
+| VWAP | 16.60 | 16.28 | | 12.18 | 0 | 68.6 |
+| naive always-passive VWAP | 13.93 | 14.39 | −1.895 (−2.294, −1.473) | 11.92 | 82% | 75.0 |
+| pace-only MLP / eFNN | 16.46 / 16.47 | 16.07 / 16.08 | −0.207 / −0.200 | 12.18 | 0 | 67.4 / 66.8 |
+| limit-MLP / eFNN, dead zone (part 3) | 15.39 / 15.71 | 15.57 / 15.80 | −0.715 / −0.476 | 12.51 / 12.55 | 53% / 43% | 81.4 / 78.0 |
+| **limit-MLP, init at naive rule** | **13.51** | **13.95** | **−2.326** (−2.706, −1.952) | 11.93 | 91% | **69.1** |
+| **limit-eFNN, init at naive rule** | **13.48** | **13.92** | **−2.358** (−2.734, −1.997) | 11.93 | 91% | **69.0** |
+
+| paired, TickSim | diff (session CI) | date CI |
+|---|---|---|
+| limit-MLP − naive always-passive | **−0.431** (−0.605, −0.278) | (−0.614, −0.254) |
+| limit-eFNN − naive always-passive | **−0.463** (−0.635, −0.307) | (−0.642, −0.289) |
+| limit-eFNN − limit-MLP | −0.032 (−0.093, +0.028) | (−0.092, +0.032) |
+| limit-MLP − pace-only MLP | −2.120 (−2.554, −1.672) | (−2.666, −1.630) |
+
+In BarSim the gains over the naive rule are −0.419 (MLP) and −0.451 (eFNN): the same as in TickSim.
+
+### Reading
+
+- **The learned limit policies now beat the naive rule** by 0.43-0.46 bps, with both CIs excluding 0 and
+  the same gain in BarSim and TickSim. The fill-model change does not create the improvement.
+- **They also fix the naive rule's tail.** CVaR95 of IS is 69 against 75 for always-passive, close to VWAP's
+  68.6. The policies post nearly everything passively (91%) but pace at about 1.6× the VWAP schedule, so
+  shares that do not fill are not left waiting while the price runs away. That is the cost-risk trade-off
+  the agent was meant to learn.
+- **eFNN = MLP here too** (−0.03, n.s.), as for pacing alone.
+- **Initialisation mattered more than architecture.** From a passive mean of 0.2, PPO settled in a local
+  optimum of mixed orders (parts 2-3); from the naive rule it improves on it in every seed (final mean
+  passive 0.95-0.96, pace 1.56-1.67).
+- **Caveat (as part 2):** passive fills are counterfactual. Our resting order is filled from historical flow
+  that did not know about it, and does not displace other traders in the queue. The absolute passive gains
+  (−2.3 bps) are an upper bound. The comparison with the naive rule shares that bias, so the −0.4 bps the
+  agent adds on top of it is the more defensible number.

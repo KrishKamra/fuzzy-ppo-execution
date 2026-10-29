@@ -24,14 +24,33 @@ function ApiStatus() {
   );
 }
 
+/** The mark (public/custom.svg): three fuzzy membership functions and the agent's state firing the middle one. */
+export function LogoMark({ className = "size-7" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" aria-hidden className={clsx(className, "shrink-0")}>
+      <defs>
+        <linearGradient id="mark-aurora" x1="4" y1="4" x2="60" y2="60" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#6366F1" />
+          <stop offset="0.5" stopColor="#8B5CF6" />
+          <stop offset="1" stopColor="#22D3EE" />
+        </linearGradient>
+      </defs>
+      <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#mark-aurora)" />
+      <g fill="none" stroke="#fff" strokeLinecap="round">
+        <path d="M8 46 C14 46 15 27 20 27 S26 46 33 46" strokeOpacity="0.5" strokeWidth="2.6" />
+        <path d="M31 46 C38 46 39 27 44 27 S50 46 56 46" strokeOpacity="0.5" strokeWidth="2.6" />
+        <path d="M16 46 C24 46 25 16 32 16 S40 46 48 46" strokeWidth="3.6" />
+      </g>
+      <circle cx="38.6" cy="27.4" r="6.4" fill="#fff" fillOpacity="0.22" />
+      <circle cx="38.6" cy="27.4" r="3.6" fill="#fff" />
+    </svg>
+  );
+}
+
 export function Logo() {
   return (
-    <NavLink to="/" className="flex items-center gap-2.5" title="Overview">
-      <span aria-hidden className="bg-aurora grid size-7 place-items-center rounded-lg">
-        <svg viewBox="0 0 24 24" className="size-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.2">
-          <path d="M3 17c3-6 6-6 9-2s6 4 9-4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </span>
+    <NavLink to="/" className="group flex items-center gap-2.5" title="Overview">
+      <LogoMark className="size-7 transition-transform duration-300 group-hover:rotate-[-6deg] group-hover:scale-105" />
       <span className="text-sm font-semibold tracking-tight">
         Fuzzy<span className="text-fg-subtle"> · </span>Execution
       </span>

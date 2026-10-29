@@ -116,10 +116,13 @@ export function Execute() {
           {randomError && <p role="alert" className="mt-3 text-xs text-bad">{randomError}</p>}
         </Panel>
 
-        <Panel className="min-h-[640px] p-4">
+        <Panel className="min-h-[640px] self-start p-4">
           {order.isFetching && !trace ? (
-            <div className="grid h-full min-h-[600px] place-items-center text-sm text-fg-muted">
-              <span className="flex items-center gap-2"><Loader2 aria-hidden className="size-4 animate-spin" /> Running every policy on the same order…</span>
+            <div className="space-y-3" aria-busy="true">
+              <p className="flex items-center gap-2 px-2 text-sm text-fg-muted"><Loader2 aria-hidden className="size-4 animate-spin" /> Running every policy on the same order…</p>
+              <div className="skeleton h-[250px]" />
+              <div className="skeleton h-[140px]" />
+              <div className="skeleton h-[180px]" />
             </div>
           ) : order.error ? (
             <div role="alert" className="grid h-full min-h-[600px] place-items-center text-center text-sm text-fg-muted">

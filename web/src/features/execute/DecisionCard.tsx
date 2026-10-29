@@ -1,9 +1,13 @@
 import type { OrderTrace } from "@/api/client";
+import { useRules } from "@/api/queries";
+import { FuzzyBrain } from "@/features/brain/FuzzyBrain";
 import { PACE_SCALE, seriesColor } from "@/lib/palette";
 import { useReplay } from "@/store/replay";
 import { useUi } from "@/store/ui";
 
 import { cursorIndex, decisionAt } from "./model";
+
+const BASELINES = new Set(["vwap", "twap", "almgren_chriss", "vwap_passive100"]);
 
 const INPUTS = [
   { label: "Order-book imbalance", lo: "against us", hi: "with us" },
@@ -17,12 +21,14 @@ function paceWords(pace: number): string {
   return "on the VWAP schedule";
 }
 
-/** What the focus policy just did, and the three regime inputs it saw (the fuzzy brain grows from here, M6e). */
+/** What the focus policy just did, and why: its fuzzy brain if it has rules, else the three inputs it saw. */
 export function DecisionCard({ trace }: { trace: OrderTrace }) {
   const k = useReplay((s) => s.k);
   const focusName = useReplay((s) => s.focus);
   const theme = useUi((s) => s.effectiveTheme());
   const focus = trace.policies.find((p) => p.name === focusName) ?? trace.policies[0];
+  const explains = !!focus?.steps.phi;
+  const rules = useRules(focus?.name, explains);
   if (!focus) return null;
   const d = decisionAt(focus, k);
   const scale = PACE_SCALE[theme];
@@ -57,6 +63,17 @@ export function DecisionCard({ trace }: { trace: OrderTrace }) {
           <dd className="tabular mt-0.5 font-mono">{limit ? `${Math.round(d.passive * 100)}%` : "–"}</dd>
         </div>
       </dl>
+      {explains && rules.data ? (
+        <div className="space-y-2">
+          <p className="text-xs text-fg-subtle">Why: the fuzzy rules firing now</p>
+          <FuzzyBrain rules={rules.data} phi={d.phi} regime={d.regime} />
+        </div>
+      ) : explains && rules.isPending ? (
+        <div className="space-y-2" aria-label="Loading rules">
+          <div className="skeleton h-20" />
+          <div className="skeleton h-24" />
+        </div>
+      ) : (
       <div className="space-y-3">
         <p className="text-xs text-fg-subtle">What it saw (train-standardised)</p>
         {INPUTS.map((inp, j) => {
@@ -82,7 +99,13 @@ export function DecisionCard({ trace }: { trace: OrderTrace }) {
             </div>
           );
         })}
+        <p className="rounded-md bg-surface-2 px-3 py-2 text-xs leading-relaxed text-fg-muted">
+          {BASELINES.has(focus.name)
+            ? "A classical baseline: a fixed schedule, not a learned policy."
+            : "This policy has no single rule base to show (a neural network, or an average of several seeds). Focus a seed-0 eFNN to read its rules."}
+        </p>
       </div>
+      )}
     </div>
   );
 }

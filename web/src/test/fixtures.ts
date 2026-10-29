@@ -1,4 +1,4 @@
-import type { Meta, OrderTrace, PolicyTrace } from "@/api/client";
+import type { Meta, OrderTrace, PolicyTrace, Rules } from "@/api/client";
 
 export const META: Meta = {
   securities: ["ADE IS Equity", "APHS IS Equity"],
@@ -63,3 +63,16 @@ export function makeTrace(): OrderTrace {
     ],
   }; // fmt: skip
 }
+
+/** Three rules matching the fixture trace's three-way phi (R0 fires 70%). */
+export const RULES: Rules = {
+  policy: "efnn_s0",
+  inputs: ["imbalance", "spread_var", "rv"],
+  input_labels: ["Order-book imbalance", "Spread variance", "Realised vol"],
+  terciles: [[-0.4, 0.4], [-0.5, 0.5], [-0.45, 0.45]],
+  rules: [
+    { rule: 0, centres: [0, -1, 0.2], widths: [1, 0.8, 0.9], terms: ["NEUTRAL", "LOW", "MED"], pace: 0.97, passive: null, share: 0.8 },
+    { rule: 1, centres: [0.1, -1.2, -1.1], widths: [1, 0.7, 0.6], terms: ["NEUTRAL", "LOW", "LOW"], pace: 1.06, passive: null, share: 0.12 },
+    { rule: 2, centres: [0, 1.4, 1.5], widths: [1.1, 0.9, 0.9], terms: ["NEUTRAL", "HIGH", "HIGH"], pace: 0.88, passive: null, share: 0.08 },
+  ],
+};

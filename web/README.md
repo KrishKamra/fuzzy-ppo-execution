@@ -25,7 +25,9 @@ Layout: `src/styles/index.css` (design tokens, themes), `src/lib/palette.ts` (th
 do not re-order), `src/api/` (typed client and query hooks), `src/store/ui.ts` (theme, presentation mode,
 palette), `src/store/replay.ts` (the replay clock), `src/components/shell/` (top bar, command palette, app shell),
 `src/components/charts/EChart.tsx` (the ECharts host), `src/features/execute/` (the Execute screen: `model.ts` pure
-views of a trace, `charts.ts` option builders, `ticket.ts` URL-encoded order tickets), `src/pages/` (screens).
+views of a trace, `charts.ts` option builders, `ticket.ts` URL-encoded order tickets), `src/features/brain/` (the
+fuzzy brain and the lazy three.js regime space with its SVG fallback), `src/pages/` (screens). Brand: `public/custom.svg`
+(logo and favicon); the README banner is `docs/assets/hero.svg`.
 
 Keys: `1`-`5` screens, `Ctrl/⌘ K` command palette, `T` theme, `P` presentation mode (projector); on Execute,
 `Space` play/pause and `←` `→` step (Shift: ten). An order is a link: `/execute?sec=…&date=…&start=…&h=…&side=…&p=…&sim=…&pol=…`.

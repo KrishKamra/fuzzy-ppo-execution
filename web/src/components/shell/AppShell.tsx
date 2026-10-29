@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Outlet, useNavigate } from "react-router";
+import { Outlet, useLocation, useNavigate } from "react-router";
 
 import { NAV } from "@/app/nav";
 import { isTyping } from "@/lib/dom";
@@ -36,11 +36,11 @@ function AmbientBackground() {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div
-        className="absolute -top-[30vh] left-[10vw] size-[70vh] rounded-full blur-[120px]"
+        className="drift absolute -top-[30vh] left-[10vw] size-[70vh] rounded-full blur-[120px]"
         style={{ background: "var(--accent-2)", opacity: "var(--ambient-opacity)" }}
       />
       <div
-        className="absolute top-[20vh] -right-[15vw] size-[60vh] rounded-full blur-[120px]"
+        className="drift-slow absolute top-[20vh] -right-[15vw] size-[60vh] rounded-full blur-[120px]"
         style={{ background: "var(--accent-3)", opacity: "var(--ambient-opacity)" }}
       />
     </div>
@@ -49,6 +49,7 @@ function AmbientBackground() {
 
 export function AppShell() {
   const { theme, presentation } = useUi();
+  const { pathname } = useLocation();
   useEffect(() => applyToDocument({ theme, presentation }), [theme, presentation]);
   useGlobalHotkeys();
   return (
@@ -62,7 +63,10 @@ export function AppShell() {
       </a>
       <TopBar />
       <main id="main" className="mx-auto max-w-[1440px] px-4 pt-10 pb-24 sm:px-6">
-        <Outlet />
+        {/* Keyed on the path, so each screen enters with a short rise (off under reduced motion). */}
+        <div key={pathname} className="animate-enter">
+          <Outlet />
+        </div>
       </main>
       <CommandPalette />
     </div>

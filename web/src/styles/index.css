@@ -122,6 +122,75 @@ body {
   border-radius: 6px;
 }
 
+/* ---------------------------------------------------------------- motion vocabulary
+   Only opacity and transform animate (compositor-friendly). The reduced-motion block below switches all of it off. */
+
+/* Screens and swapped content enter with a short rise. */
+@keyframes enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-enter { animation: enter 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+/* Loading placeholders: a soft sweep, never a spinner wall. */
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.skeleton {
+  border-radius: var(--radius-control);
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* Interactive cards: an aurora border fades in on hover (a masked gradient ring, no layout change). */
+.gradient-border { position: relative; }
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--aurora);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 220ms ease;
+  pointer-events: none;
+}
+.gradient-border:hover::before, .gradient-border:focus-within::before, .gradient-border[data-active="true"]::before { opacity: 1; }
+
+/* The primary action: a light sheen sweeps across on hover. */
+.sheen { position: relative; overflow: hidden; isolation: isolate; }
+.sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.28) 50%, transparent 70%);
+  transform: translateX(-120%);
+  transition: transform 600ms ease;
+  z-index: -1;
+}
+.sheen:hover::after { transform: translateX(120%); }
+
+/* The active rule: a soft aurora glow that breathes once when the regime changes. */
+@keyframes glow-in {
+  from { box-shadow: 0 0 0 0 rgb(139 92 246 / 0.55); }
+  to { box-shadow: 0 0 0 10px rgb(139 92 246 / 0); }
+}
+.glow-in { animation: glow-in 700ms ease-out; }
+
+/* Ambient background glows drift very slowly. */
+@keyframes drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(4vw, 3vh, 0) scale(1.08); }
+}
+.drift { animation: drift 28s ease-in-out infinite; }
+.drift-slow { animation: drift 40s ease-in-out infinite reverse; }
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

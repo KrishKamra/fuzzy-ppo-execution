@@ -98,7 +98,7 @@ charts carry a text summary; reduced motion respected; colour never the only sig
 |---|---|---|
 | **M6c** ✅ | `web/` scaffold, tokens and themes, shell (top bar, routing, palette), typed API client | Lighthouse ≥ 95 (performance, accessibility) on the shell |
 | **M6d** ✅ | Execute screen: ticket, price/inventory/cost charts, transport dock, leaderboard | a real val order replays end to end, all panels in sync |
-| **M6e** | Fuzzy brain rail + Brain screen (3D regime space with 2D fallback) | rule text equals `hftf eval rules`; the 3D chunk loads only on that screen |
+| **M6e** ✅ | Fuzzy brain rail + Brain screen (3D regime space with 2D fallback) | rule text equals `hftf eval rules`; the 3D chunk loads only on that screen |
 | **M6f** | Evidence and Training screens, hero, presentation mode, demo script, README | a 3-minute scripted demo runs from a clean checkout plus local `data/` and `runs/` |
 
 **M6c as built:** `web/` (see `web/README.md`). Tokens in `src/styles/index.css` (Tailwind 4 `@theme`); the data
@@ -121,6 +121,23 @@ line. The Execute route is lazy, so ECharts loads only there (shell 133.8 KB + E
 is pinned to 5.6.0 (the 6.x line changed defaults). Under `prefers-reduced-motion` the replay opens at the
 finished state instead of autoplaying. Measured with a real 6-policy TickSim order: Lighthouse desktop 100 /
 100 / 100, LCP 0.7 s, TBT 0 ms, CLS 0.012.
+
+**M6e as built:** `web/src/features/brain/`. `fuzzy.ts` (Gaussian membership, active rule, rule as a sentence,
+pace colour) feeds `FuzzyBrain` (the active rule as a sentence; firing bars; three membership plots in plain
+SVG, with the live value as a gliding needle). It appears in the Execute rail for single fuzzy checkpoints;
+an MLP or an ensemble gets a note on why it has no rule base. The Brain screen draws the **3D regime space**
+in plain three.js (no react-three-fiber or drei): rules as ±1σ ellipsoids coloured by pace, the tercile
+planes, the order's path (line + dots, violet → cyan) and its moving point. It renders on demand, stops
+off-screen, auto-rotates until touched (not under reduced motion), and hovering a rule links the ellipsoid,
+bars and table. Without WebGL it falls back to two SVG projections. The pace colour scale spans ±10% (learned
+paces lie in 0.85-1.1; ±15% left most rules grey).
+Motion, all in CSS (opacity/transform only, off under reduced motion): screen enter, ambient drift, primary
+sheen, press feedback, gradient border on hover, active-rule glow, skeleton shimmer. **Dropped as not worth
+the weight:** Framer Motion, row-reorder (FLIP) animation, count-up numbers, tilt/parallax/particles.
+Bundles (gzip): shell 131 KB; Execute 171 KB (ECharts); Brain 3 KB + RegimeSpace 143 KB (three.js), each
+loaded only on its screen. Lighthouse desktop: Overview 100/100/100, Execute 98/100/100, Brain 95/100/100
+(TBT 150 ms under software WebGL in headless Edge). Brand: `web/public/custom.svg` (logo and favicon: three
+membership functions with the agent's state) and `docs/assets/hero.svg` (the README banner).
 
 **Stretch (after M6f):** to animate the rule base *growing during training* in 3D, the trainer would also need
 to save rule snapshots (centres, widths) at each structure edit. Today `events.csv` records which rules

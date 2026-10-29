@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" width="1280" height="420" role="img" aria-labelledby="t d">
+  <title id="t">Fuzzy Execution</title>
+  <desc id="d">Regime-aware optimal execution with an evolving fuzzy PPO agent: a price path with child-order fills above three fuzzy membership functions and the agent's state.</desc>
+  <defs>
+    <linearGradient id="aurora" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366F1"/>
+      <stop offset="0.5" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="auroraText" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#818CF8"/>
+      <stop offset="0.5" stop-color="#A78BFA"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="tileSheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0A0B10" stop-opacity="1"/>
+      <stop offset="0.35" stop-color="#0A0B10" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="pathGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.7"/>
+    </linearGradient>
+    <radialGradient id="glowViolet" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#8B5CF6" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowCyan" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22D3EE" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#FFFFFF" stroke-opacity="0.045" stroke-width="1"/>
+    </pattern>
+    <clipPath id="frame"><rect width="1280" height="420" rx="24"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <!-- Background: near-black, a faint grid and two soft aurora glows -->
+    <rect width="1280" height="420" fill="#0A0B10"/>
+    <ellipse cx="300" cy="40" rx="520" ry="300" fill="url(#glowViolet)"/>
+    <ellipse cx="1120" cy="380" rx="460" ry="300" fill="url(#glowCyan)"/>
+    <rect width="1280" height="420" fill="url(#grid)"/>
+
+    <!-- Right: the agent at work. A price path with child-order fills (solid = aggressive, hollow = passive) -->
+    <g transform="translate(700 70)">
+      <path d="M0 70 L30 62 L55 74 L80 58 L105 66 L130 48 L160 55 L190 40 L215 50 L245 34 L270 44 L300 30 L330 38 L360 24 L390 30 L420 16 L450 22 L480 12"
+            fill="none" stroke="url(#pathGrad)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <g fill="#A78BFA" stroke="#0A0B10" stroke-width="2">
+        <circle cx="130" cy="48" r="5"/><circle cx="190" cy="40" r="6.5"/><circle cx="300" cy="30" r="5.5"/><circle cx="420" cy="16" r="7"/>
+      </g>
+      <g fill="none" stroke="#67E8F9" stroke-width="2">
+        <circle cx="245" cy="34" r="5"/><circle cx="360" cy="24" r="6"/><circle cx="480" cy="12" r="5"/>
+      </g>
+    </g>
+
+    <!-- Right, below: three fuzzy membership functions (LOW / MED / HIGH) and the current state firing MED -->
+    <g transform="translate(700 190)">
+      <line x1="0" y1="150" x2="500" y2="150" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="1.5"/>
+      <path d="M0 150 C70 150 80 40 125 40 S180 150 250 150" fill="#6366F1" fill-opacity="0.10" stroke="#818CF8" stroke-opacity="0.75" stroke-width="2.5"/>
+      <path d="M250 150 C320 150 330 40 375 40 S430 150 500 150" fill="#22D3EE" fill-opacity="0.08" stroke="#22D3EE" stroke-opacity="0.7" stroke-width="2.5"/>
+      <path d="M110 150 C185 150 200 10 250 10 S315 150 390 150" fill="#8B5CF6" fill-opacity="0.16" stroke="#C4B5FD" stroke-width="3.5"/>
+      <line x1="285" y1="0" x2="285" y2="150" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="1.5" stroke-dasharray="4 4"/>
+      <circle cx="285" cy="34" r="12" fill="#FFFFFF" fill-opacity="0.14"/>
+      <circle cx="285" cy="34" r="6" fill="#FFFFFF"/>
+      <g font-family="Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="600" letter-spacing="1.5" fill="#FFFFFF" fill-opacity="0.45" text-anchor="middle">
+        <text x="125" y="172">LOW</text><text x="250" y="172" fill-opacity="0.8">MED</text><text x="375" y="172">HIGH</text>
+      </g>
+    </g>
+    <rect width="1280" height="420" fill="url(#fade)"/>
+
+    <!-- Left: mark, name, promise -->
+    <g transform="translate(72 96)">
+      <g transform="scale(1.5)">
+        <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#aurora)"/>
+        <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#tileSheen)"/>
+        <path d="M8 46 C14 46 15 27 20 27 S26 46 33 46" fill="none" stroke="#FFFFFF" stroke-opacity="0.5" stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M31 46 C38 46 39 27 44 27 S50 46 56 46" fill="none" stroke="#FFFFFF" stroke-opacity="0.5" stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M16 46 C24 46 25 16 32 16 S40 46 48 46" fill="none" stroke="#FFFFFF" stroke-width="3.6" stroke-linecap="round"/>
+        <circle cx="38.6" cy="27.4" r="6.4" fill="#FFFFFF" fill-opacity="0.22"/>
+        <circle cx="38.6" cy="27.4" r="3.6" fill="#FFFFFF"/>
+      </g>
+      <g font-family="Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+        <text x="0" y="168" font-size="64" font-weight="700" letter-spacing="-1.5" fill="#FFFFFF">Fuzzy <tspan fill="url(#auroraText)">Execution</tspan></text>
+        <text x="2" y="212" font-size="22" fill="#FFFFFF" fill-opacity="0.72">Regime-aware optimal execution with an</text>
+        <text x="2" y="242" font-size="22" fill="#FFFFFF" fill-opacity="0.72">evolving fuzzy PPO agent you can read.</text>
+        <g font-size="13" font-weight="600" letter-spacing="1.2" fill="#FFFFFF" fill-opacity="0.55">
+          <text x="2" y="290">PPO · EVOLVING FUZZY NETWORK · NSE · TICK REPLAY</text>
+        </g>
+      </g>
+    </g>
+  </g>
+  <rect x="0.5" y="0.5" width="1279" height="419" rx="23.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.08"/>
+</svg>

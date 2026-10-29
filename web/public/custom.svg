@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Fuzzy Execution">
+  <title>Fuzzy Execution</title>
+  <defs>
+    <linearGradient id="fx-aurora" x1="4" y1="4" x2="60" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366F1"/>
+      <stop offset="0.5" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="fx-sheen" x1="32" y1="2" x2="32" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- Tile -->
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#fx-aurora)"/>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#fx-sheen)"/>
+  <!-- Three Gaussian membership functions: LOW, MED, HIGH -->
+  <path d="M8 46 C14 46 15 27 20 27 S26 46 33 46" fill="none" stroke="#FFFFFF" stroke-opacity="0.5" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M31 46 C38 46 39 27 44 27 S50 46 56 46" fill="none" stroke="#FFFFFF" stroke-opacity="0.5" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M16 46 C24 46 25 16 32 16 S40 46 48 46" fill="none" stroke="#FFFFFF" stroke-width="3.6" stroke-linecap="round"/>
+  <!-- The agent's state, firing the middle rule -->
+  <circle cx="38.6" cy="27.4" r="6.4" fill="#FFFFFF" fill-opacity="0.22"/>
+  <circle cx="38.6" cy="27.4" r="3.6" fill="#FFFFFF"/>
+</svg>

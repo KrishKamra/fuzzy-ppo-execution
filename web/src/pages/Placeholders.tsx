@@ -43,20 +43,6 @@ function Scaffold({ eyebrow, title, next, children }: { eyebrow: string; title: 
   );
 }
 
-export function Brain() {
-  return (
-    <Scaffold eyebrow="Brain" title="The fuzzy rules and the regime space" next="The 3D regime space and rule tables arrive in M6e.">
-      <MetaFacts
-        pick={(m) => [
-          ["Regime inputs", m.regime_inputs.length],
-          ["Policies that explain themselves", m.policies.filter((p) => p.explains).length],
-          ["With limit orders", m.policies.filter((p) => p.limit_orders).length],
-        ]}
-      />
-    </Scaffold>
-  );
-}
-
 export function Evidence() {
   return (
     <Scaffold eyebrow="Evidence" title="What the statistics support" next="Forest plots, the replication and the claims checklist arrive in M6f.">

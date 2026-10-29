@@ -11,3 +11,14 @@ export function useHealth() {
 export function useMeta() {
   return useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity, retry: 1 });
 }
+
+/** A fuzzy policy's rules (centres, widths, terms, pace): fixed for a checkpoint. */
+export function useRules(policy: string | null | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["rules", policy],
+    queryFn: () => api.rules(policy as string),
+    enabled: !!policy && enabled,
+    staleTime: Infinity,
+    retry: false,
+  });
+}

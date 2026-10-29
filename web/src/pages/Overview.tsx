@@ -45,9 +45,9 @@ export function Overview() {
         <div className="mt-9 flex flex-wrap justify-center gap-3">
           <Link
             to="/execute?random=1"
-            className="bg-aurora inline-flex h-11 items-center gap-2 rounded-[var(--radius-control)] px-5 font-medium text-white shadow-[0_12px_32px_-14px_var(--accent-2)] transition hover:brightness-110"
+            className="sheen bg-aurora group inline-flex h-11 items-center gap-2 rounded-[var(--radius-control)] px-5 font-medium text-white shadow-[0_12px_32px_-14px_var(--accent-2)] transition hover:brightness-110 active:scale-[0.98]"
           >
-            Run a live order <ArrowRight aria-hidden className="size-4" />
+            Run a live order <ArrowRight aria-hidden className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
           </Link>
           <Link
             to="/evidence"
@@ -59,7 +59,7 @@ export function Overview() {
       </section>
       <section aria-label="Headline results" className="grid gap-4 md:grid-cols-3">
         {CLAIMS.map((c) => (
-          <Panel key={c.label} className="p-6">
+          <Panel key={c.label} className="gradient-border p-6 transition-transform duration-300 hover:-translate-y-0.5">
             <div className="flex items-center gap-2 text-sm text-fg-muted">
               <span className="text-accent-2">{c.icon}</span>
               {c.label}

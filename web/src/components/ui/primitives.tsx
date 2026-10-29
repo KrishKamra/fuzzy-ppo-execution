@@ -5,7 +5,7 @@ type Variant = "primary" | "secondary" | "ghost";
 
 const VARIANTS: Record<Variant, string> = {
   // The one gradient control on a screen: the primary action.
-  primary: "bg-aurora text-white shadow-[0_8px_24px_-12px_var(--accent-2)] hover:brightness-110",
+  primary: "sheen bg-aurora text-white shadow-[0_8px_24px_-12px_var(--accent-2)] hover:brightness-110",
   secondary: "bg-surface-2 text-fg border border-hairline hover:bg-surface-3",
   ghost: "text-fg-muted hover:text-fg hover:bg-surface-2",
 };
@@ -20,7 +20,7 @@ export function Button({
       type="button"
       className={clsx(
         "inline-flex h-9 items-center gap-2 rounded-[var(--radius-control)] px-3.5 text-sm font-medium",
-        "transition-[background,color,filter] duration-150 disabled:pointer-events-none disabled:opacity-50",
+        "transition-[background,color,filter,transform] duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50",
         VARIANTS[variant],
         className,
       )}

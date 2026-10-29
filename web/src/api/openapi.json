@@ -1,0 +1,1170 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "hftf demo API",
+    "description": "Regime-aware execution with fuzzy PPO: order traces, rules, training and results.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Api Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/meta": {
+      "get": {
+        "summary": "Meta",
+        "operationId": "meta_api_meta_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meta"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/order/random": {
+      "get": {
+        "summary": "Random Order",
+        "operationId": "random_order_api_order_random_get",
+        "parameters": [
+          {
+            "name": "split",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "val",
+              "title": "Split"
+            }
+          },
+          {
+            "name": "sim",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "bar",
+                "tick"
+              ],
+              "type": "string",
+              "default": "bar",
+              "title": "Sim"
+            }
+          },
+          {
+            "name": "seed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMaximum": 2147483648,
+              "default": 0,
+              "title": "Seed"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderTicket"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/order": {
+      "post": {
+        "summary": "Order",
+        "operationId": "order_api_order_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderTrace"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/policies/{name}/rules": {
+      "get": {
+        "summary": "Rules",
+        "operationId": "rules_api_policies__name__rules_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rules"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runs/{name}": {
+      "get": {
+        "summary": "Run",
+        "operationId": "run_api_runs__name__get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunCurves"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/results": {
+      "get": {
+        "summary": "Results",
+        "operationId": "results_api_results_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Results"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "MarketSeries": {
+        "properties": {
+          "minute": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Minute"
+          },
+          "time": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Time"
+          },
+          "mid": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Mid"
+          },
+          "bid": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Bid"
+          },
+          "ask": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Ask"
+          },
+          "volume": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Volume"
+          },
+          "expected_volume": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Expected Volume"
+          }
+        },
+        "type": "object",
+        "required": [
+          "minute",
+          "time",
+          "mid",
+          "bid",
+          "ask",
+          "volume",
+          "expected_volume"
+        ],
+        "title": "MarketSeries"
+      },
+      "Meta": {
+        "properties": {
+          "securities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Securities"
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionInfo"
+            },
+            "type": "array",
+            "title": "Sessions"
+          },
+          "horizons": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Horizons"
+          },
+          "earliest_start": {
+            "type": "string",
+            "title": "Earliest Start"
+          },
+          "latest_end": {
+            "type": "string",
+            "title": "Latest End"
+          },
+          "participation": {
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Participation"
+          },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyInfo"
+            },
+            "type": "array",
+            "title": "Policies"
+          },
+          "default_policies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Default Policies"
+          },
+          "runs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Runs"
+          },
+          "regime_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Regime Inputs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "securities",
+          "sessions",
+          "horizons",
+          "earliest_start",
+          "latest_end",
+          "participation",
+          "policies",
+          "default_policies",
+          "runs",
+          "regime_inputs"
+        ],
+        "title": "Meta"
+      },
+      "Order": {
+        "properties": {
+          "security": {
+            "type": "string",
+            "title": "Security"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "split": {
+            "type": "string",
+            "title": "Split"
+          },
+          "start": {
+            "type": "string",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "title": "End"
+          },
+          "horizon": {
+            "type": "integer",
+            "title": "Horizon"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side"
+          },
+          "qty": {
+            "type": "number",
+            "title": "Qty"
+          },
+          "arrival_mid": {
+            "type": "number",
+            "title": "Arrival Mid"
+          },
+          "sim": {
+            "type": "string",
+            "enum": [
+              "bar",
+              "tick"
+            ],
+            "title": "Sim"
+          }
+        },
+        "type": "object",
+        "required": [
+          "security",
+          "date",
+          "split",
+          "start",
+          "end",
+          "horizon",
+          "side",
+          "qty",
+          "arrival_mid",
+          "sim"
+        ],
+        "title": "Order"
+      },
+      "OrderRequest": {
+        "properties": {
+          "security": {
+            "type": "string",
+            "title": "Security"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date",
+            "description": "IST session date, YYYY-MM-DD"
+          },
+          "start": {
+            "type": "string",
+            "title": "Start",
+            "description": "first decision, IST HH:MM"
+          },
+          "horizon": {
+            "type": "integer",
+            "title": "Horizon"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side"
+          },
+          "participation": {
+            "type": "number",
+            "maximum": 0.3,
+            "exclusiveMinimum": 0.0,
+            "title": "Participation",
+            "description": "Q / expected volume over the horizon"
+          },
+          "policies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Policies",
+            "description": "names from /meta; empty = defaults"
+          },
+          "sim": {
+            "type": "string",
+            "enum": [
+              "bar",
+              "tick"
+            ],
+            "title": "Sim",
+            "default": "bar"
+          }
+        },
+        "type": "object",
+        "required": [
+          "security",
+          "date",
+          "start",
+          "horizon",
+          "side",
+          "participation"
+        ],
+        "title": "OrderRequest"
+      },
+      "OrderTicket": {
+        "properties": {
+          "security": {
+            "type": "string",
+            "title": "Security"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date",
+            "description": "IST session date, YYYY-MM-DD"
+          },
+          "start": {
+            "type": "string",
+            "title": "Start",
+            "description": "first decision, IST HH:MM"
+          },
+          "horizon": {
+            "type": "integer",
+            "title": "Horizon"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side"
+          },
+          "participation": {
+            "type": "number",
+            "maximum": 0.3,
+            "exclusiveMinimum": 0.0,
+            "title": "Participation",
+            "description": "Q / expected volume over the horizon"
+          }
+        },
+        "type": "object",
+        "required": [
+          "security",
+          "date",
+          "start",
+          "horizon",
+          "side",
+          "participation"
+        ],
+        "title": "OrderTicket"
+      },
+      "OrderTrace": {
+        "properties": {
+          "order": {
+            "$ref": "#/components/schemas/Order"
+          },
+          "market": {
+            "$ref": "#/components/schemas/MarketSeries"
+          },
+          "regime_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Regime Inputs"
+          },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyTrace"
+            },
+            "type": "array",
+            "title": "Policies"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order",
+          "market",
+          "regime_inputs",
+          "policies"
+        ],
+        "title": "OrderTrace"
+      },
+      "PolicyInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "baseline",
+              "ppo"
+            ],
+            "title": "Kind"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "explains": {
+            "type": "boolean",
+            "title": "Explains"
+          },
+          "limit_orders": {
+            "type": "boolean",
+            "title": "Limit Orders"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "label",
+          "kind",
+          "description",
+          "explains",
+          "limit_orders"
+        ],
+        "title": "PolicyInfo"
+      },
+      "PolicyTrace": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "summary": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Summary"
+          },
+          "steps": {
+            "$ref": "#/components/schemas/Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "label",
+          "summary",
+          "steps"
+        ],
+        "title": "PolicyTrace"
+      },
+      "ResultTable": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "columns",
+          "rows"
+        ],
+        "title": "ResultTable"
+      },
+      "Results": {
+        "properties": {
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/ResultTable"
+            },
+            "type": "array",
+            "title": "Tables"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tables"
+        ],
+        "title": "Results"
+      },
+      "Rule": {
+        "properties": {
+          "rule": {
+            "type": "integer",
+            "title": "Rule"
+          },
+          "centres": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Centres"
+          },
+          "widths": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Widths"
+          },
+          "terms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Terms"
+          },
+          "pace": {
+            "type": "number",
+            "title": "Pace"
+          },
+          "passive": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passive"
+          },
+          "share": {
+            "type": "number",
+            "title": "Share"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rule",
+          "centres",
+          "widths",
+          "terms",
+          "pace",
+          "share"
+        ],
+        "title": "Rule"
+      },
+      "Rules": {
+        "properties": {
+          "policy": {
+            "type": "string",
+            "title": "Policy"
+          },
+          "inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Inputs"
+          },
+          "input_labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Input Labels"
+          },
+          "terciles": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Terciles"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/Rule"
+            },
+            "type": "array",
+            "title": "Rules"
+          }
+        },
+        "type": "object",
+        "required": [
+          "policy",
+          "inputs",
+          "input_labels",
+          "terciles",
+          "rules"
+        ],
+        "title": "Rules"
+      },
+      "RunCurves": {
+        "properties": {
+          "run": {
+            "type": "string",
+            "title": "Run"
+          },
+          "progress": {
+            "additionalProperties": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Progress"
+          },
+          "events": {
+            "items": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run",
+          "progress",
+          "events"
+        ],
+        "title": "RunCurves"
+      },
+      "SessionInfo": {
+        "properties": {
+          "security": {
+            "type": "string",
+            "title": "Security"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "split": {
+            "type": "string",
+            "title": "Split"
+          },
+          "ticks": {
+            "type": "boolean",
+            "title": "Ticks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "security",
+          "date",
+          "split",
+          "ticks"
+        ],
+        "title": "SessionInfo"
+      },
+      "Steps": {
+        "properties": {
+          "minute": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Minute"
+          },
+          "pace": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Pace"
+          },
+          "passive": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Passive"
+          },
+          "q": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Q"
+          },
+          "posted": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Posted"
+          },
+          "passive_filled": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Passive Filled"
+          },
+          "price": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Price"
+          },
+          "remaining": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Remaining"
+          },
+          "cum_is_bps": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Cum Is Bps"
+          },
+          "cum_fees_bps": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Cum Fees Bps"
+          },
+          "cum_risk_bps": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Cum Risk Bps"
+          },
+          "cum_cost_bps": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Cum Cost Bps"
+          },
+          "regime": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Regime"
+          },
+          "phi": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phi"
+          }
+        },
+        "type": "object",
+        "required": [
+          "minute",
+          "pace",
+          "passive",
+          "q",
+          "posted",
+          "passive_filled",
+          "price",
+          "remaining",
+          "cum_is_bps",
+          "cum_fees_bps",
+          "cum_risk_bps",
+          "cum_cost_bps",
+          "regime"
+        ],
+        "title": "Steps"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

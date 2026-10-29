@@ -75,7 +75,7 @@ bookmarked).
 
 | Concern | Choice | Why |
 |---|---|---|
-| App | React 18 + Vite + TypeScript (strict) | fast dev server, typed end to end |
+| App | React 19 + Vite 8 + TypeScript 5.9 (strict); React Router 7 | fast dev server, typed end to end |
 | Types | `openapi-typescript` from `/openapi.json` | one contract with the backend |
 | Server state | TanStack Query | caching, request states |
 | Replay state | Zustand (one clock store) | every panel reads one minute index; no prop drilling |
@@ -96,10 +96,19 @@ charts carry a text summary; reduced motion respected; colour never the only sig
 
 | | Deliverable | Exit criterion |
 |---|---|---|
-| **M6c** | `web/` scaffold, tokens and themes, shell (top bar, routing, palette), typed API client | Lighthouse ≥ 95 (performance, accessibility) on the shell |
+| **M6c** ✅ | `web/` scaffold, tokens and themes, shell (top bar, routing, palette), typed API client | Lighthouse ≥ 95 (performance, accessibility) on the shell |
 | **M6d** | Execute screen: ticket, price/inventory/cost charts, transport dock, leaderboard | a real val order replays end to end, all panels in sync |
 | **M6e** | Fuzzy brain rail + Brain screen (3D regime space with 2D fallback) | rule text equals `hftf eval rules`; the 3D chunk loads only on that screen |
 | **M6f** | Evidence and Training screens, hero, presentation mode, demo script, README | a 3-minute scripted demo runs from a clean checkout plus local `data/` and `runs/` |
+
+**M6c as built:** `web/` (see `web/README.md`). Tokens in `src/styles/index.css` (Tailwind 4 `@theme`); the data
+palette in `src/lib/palette.ts`, validated with the dataviz skill on our surfaces (dark: all checks pass,
+worst adjacent CVD ΔE 9.4; light: separation passes, three slots under 3:1 on white, so light-mode charts
+using them carry direct labels or a table). Tertiary text alphas were raised to the computed WCAG minimum
+on every surface level (dark 0.50, light 0.60). Measured on the production build with the real API:
+Lighthouse desktop 100 performance / 100 accessibility / 100 best practices on Overview and Execute; LCP
+0.5 s, CLS ≤ 0.004; JS 132.6 KB + CSS 8.4 KB gzip. React Router 7 and TypeScript 5.9 were pinned over the
+newer majors (8, 7) for tooling compatibility.
 
 **Stretch (after M6f):** to animate the rule base *growing during training* in 3D, the trainer would also need
 to save rule snapshots (centres, widths) at each structure edit. Today `events.csv` records which rules

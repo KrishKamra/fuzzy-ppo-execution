@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Regime-aware optimal execution with an evolving fuzzy PPO agent: replay real orders and read its rules." />
+    <meta name="theme-color" content="#0a0b10" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Fuzzy Execution</title>
+    <script>
+      // Apply the saved theme before first paint (no flash); storage may be unavailable.
+      try {
+        const v = JSON.parse(localStorage.getItem("hftf.ui") || "{}");
+        const root = document.documentElement;
+        root.dataset.theme = v.presentation ? "light" : v.theme === "light" ? "light" : "dark";
+        if (v.presentation) root.dataset.presentation = "";
+      } catch {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

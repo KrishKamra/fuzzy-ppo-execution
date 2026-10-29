@@ -573,5 +573,20 @@ def serve(
     uvicorn.run(create_app(service), host="127.0.0.1", port=port)
 
 
+@app.command("openapi")
+def openapi(
+    out: str = typer.Option("web/src/api/openapi.json", help="Where to write the API schema."),
+) -> None:
+    """Write the demo API's OpenAPI schema (the frontend generates its TypeScript types from it)."""
+    from hftf_api.app import create_app
+    from hftf_data.paths import REPO_ROOT
+
+    path = REPO_ROOT / out
+    path.parent.mkdir(parents=True, exist_ok=True)
+    schema = create_app(None).openapi()  # the routes only touch the service when they are called
+    path.write_text(json.dumps(schema, indent=2) + "\n")
+    console.print(f"wrote {path}")
+
+
 if __name__ == "__main__":
     app()

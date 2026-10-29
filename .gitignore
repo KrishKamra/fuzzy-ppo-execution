@@ -41,3 +41,8 @@ wandb/
 Thumbs.db
 .idea/
 .vscode/
+
+# Frontend (web/)
+web/node_modules/
+web/dist/
+web/coverage/

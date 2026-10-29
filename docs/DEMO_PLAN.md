@@ -74,7 +74,7 @@ so hftf-eval stays torch-free); `hftf_sim.episodes.order_episode` builds an orde
 `/api/policies/{name}/rules` in 0.2 s (then cached), the others in < 20 ms. `hftf eval restat` recomputes the
 report tables (Holm, date clusters) from saved backtest rows without simulating.
 
-### 3.3 Frontend: `web/` (React 18 + Vite + TypeScript; ECharts for charts). Design spec: [UI_DESIGN.md](UI_DESIGN.md)
+### 3.3 Frontend: `web/` (React 19 + Vite + TypeScript; ECharts for charts). Design spec: [UI_DESIGN.md](UI_DESIGN.md)
 1. **Order ticket:** stock, session date, start time, horizon (30/60/120), side, size (% of expected
    volume), policies to compare, BarSim/TickSim, limit orders on/off, and a "random order" button.
 2. **Execution replay** (the main screen, with a play/pause scrubber over the minutes):
@@ -99,13 +99,14 @@ report tables (Holm, date clusters) from saved backtest rows without simulating.
 |---|---|---|
 | **M6a** ✅ | `hftf_eval.trace` + tests; `configs/demo.yaml` | trace totals equal `summary()` for every policy type (MLP, ANFIS, eFNN, limit), BarSim and TickSim |
 | **M6b** ✅ | `apps/api` with the five endpoints + `hftf serve`; OpenAPI types | TestClient tests on synthetic data; `/order` < 300 ms for 5 policies on CPU |
-| **M6c** | `web/` order ticket + execution replay | one real val order replays end to end for eFNN vs VWAP |
-| **M6d** | fuzzy brain panel | MFs, firing and the active rule animate in sync; rule text matches `hftf eval rules` |
-| **M6e** | learning + results views; demo script | a 3-minute scripted demo runs from a clean checkout plus local `data/` and `runs/` |
-| **M6f** | report figures exported from the UI; README "run the demo" section | figures for the report regenerate from the UI |
+| **M6c** ✅ | `web/` scaffold: design tokens and themes, shell, routing, command palette, typed API client | Lighthouse ≥ 95 on the shell (measured: 100 / 100 / 100) |
+| **M6d** | Execute screen: order ticket, price / inventory / cost-race charts, transport dock, leaderboard | one real val order replays end to end, all panels in sync |
+| **M6e** | fuzzy brain rail + Brain screen (3D regime space, 2D fallback) | rule text matches `hftf eval rules`; the 3D chunk loads only on that screen |
+| **M6f** | Evidence and Training screens, hero, presentation mode, demo script, README | a 3-minute scripted demo runs from a clean checkout plus local `data/` and `runs/` |
 
-Suggested split for three people: one owns M6a-M6b (Python), one owns M6c and M6e (replay and results),
-one owns M6d (fuzzy panel, the course-specific part). The API contract (§3.2) is fixed first so the
+The frontend milestones follow [UI_DESIGN.md](UI_DESIGN.md) §5 (the single source for M6c-M6f).
+Suggested split for three people: one owns M6a-M6b (Python), one owns M6d and M6f (replay and results),
+one owns M6e (fuzzy panel and regime space, the course-specific part). The API contract (§3.2) is fixed first so the
 three can work in parallel against mocked JSON.
 
 ## 5. What the demo claims (and does not)

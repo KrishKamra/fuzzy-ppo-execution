@@ -3,14 +3,15 @@ import { createBrowserRouter, RouterProvider } from "react-router";
 
 import { AppShell } from "@/components/shell/AppShell";
 import { Overview } from "@/pages/Overview";
-import { Brain, Evidence, Execute, NotFound, Training } from "@/pages/Placeholders";
+import { Brain, Evidence, NotFound, Training } from "@/pages/Placeholders";
 
 export const routes = [
   {
     element: <AppShell />,
     children: [
       { path: "/", element: <Overview /> },
-      { path: "/execute", element: <Execute /> },
+      // Charts (ECharts) load with the screens that draw them, not with the shell.
+      { path: "/execute", lazy: () => import("@/pages/Execute").then((m) => ({ Component: m.Execute })) },
       { path: "/brain", element: <Brain /> },
       { path: "/evidence", element: <Evidence /> },
       { path: "/training", element: <Training /> },

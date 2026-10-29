@@ -23,6 +23,9 @@ npm run dev
 
 Layout: `src/styles/index.css` (design tokens, themes), `src/lib/palette.ts` (the validated data palette;
 do not re-order), `src/api/` (typed client and query hooks), `src/store/ui.ts` (theme, presentation mode,
-palette), `src/components/shell/` (top bar, command palette, app shell), `src/pages/` (screens).
+palette), `src/store/replay.ts` (the replay clock), `src/components/shell/` (top bar, command palette, app shell),
+`src/components/charts/EChart.tsx` (the ECharts host), `src/features/execute/` (the Execute screen: `model.ts` pure
+views of a trace, `charts.ts` option builders, `ticket.ts` URL-encoded order tickets), `src/pages/` (screens).
 
-Keys: `1`-`5` screens, `Ctrl/⌘ K` command palette, `T` theme, `P` presentation mode (projector).
+Keys: `1`-`5` screens, `Ctrl/⌘ K` command palette, `T` theme, `P` presentation mode (projector); on Execute,
+`Space` play/pause and `←` `→` step (Shift: ten). An order is a link: `/execute?sec=…&date=…&start=…&h=…&side=…&p=…&sim=…&pol=…`.

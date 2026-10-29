@@ -43,20 +43,6 @@ function Scaffold({ eyebrow, title, next, children }: { eyebrow: string; title: 
   );
 }
 
-export function Execute() {
-  return (
-    <Scaffold eyebrow="Execute" title="Replay a real order" next="The order ticket, price, inventory and cost-race charts arrive in M6d.">
-      <MetaFacts
-        pick={(m) => [
-          ["Sessions (val + test)", m.sessions.length],
-          ["With tick replay", m.sessions.filter((s) => s.ticks).length],
-          ["Policies available", m.policies.length],
-        ]}
-      />
-    </Scaffold>
-  );
-}
-
 export function Brain() {
   return (
     <Scaffold eyebrow="Brain" title="The fuzzy rules and the regime space" next="The 3D regime space and rule tables arrive in M6e.">

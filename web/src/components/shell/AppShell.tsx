@@ -2,15 +2,11 @@ import { useEffect } from "react";
 import { Outlet, useNavigate } from "react-router";
 
 import { NAV } from "@/app/nav";
+import { isTyping } from "@/lib/dom";
 import { applyToDocument, useUi } from "@/store/ui";
 
 import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
-
-function isTyping(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  return !!el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
-}
 
 /** Global keys: Ctrl/⌘ K palette, 1-5 screens, P presentation, T theme. Ignored while typing in a field. */
 function useGlobalHotkeys() {

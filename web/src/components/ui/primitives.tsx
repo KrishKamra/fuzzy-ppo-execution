@@ -56,3 +56,60 @@ export function PageHeader({ eyebrow, title, children }: { eyebrow: string; titl
     </header>
   );
 }
+
+/** A compact single-choice control: buttons announced as a radio group (Tab to each, Enter or Space to pick). */
+export function Segmented<T extends string | number>({
+  label,
+  value,
+  options,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: ReactNode; disabled?: boolean; title?: string }[];
+  onChange: (v: T) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="inline-flex rounded-[var(--radius-control)] border border-hairline bg-surface-2 p-0.5">
+      {options.map((o) => {
+        const active = o.value === value;
+        return (
+          <button
+            key={String(o.value)}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            title={o.title}
+            disabled={disabled || o.disabled}
+            onClick={() => onChange(o.value)}
+            className={clsx(
+              "h-7 min-w-9 rounded-[6px] px-2.5 text-xs font-medium transition-colors",
+              active ? "bg-surface-3 text-fg shadow-sm" : "text-fg-muted hover:text-fg",
+              "disabled:cursor-not-allowed disabled:opacity-40",
+            )}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function Field({ label, error, children, htmlFor }: { label: string; error?: string; children: ReactNode; htmlFor?: string }) {
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={htmlFor} className="block text-xs font-medium text-fg-muted">
+        {label}
+      </label>
+      {children}
+      {error && (
+        <p role="alert" className="text-xs text-bad">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}

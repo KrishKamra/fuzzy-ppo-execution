@@ -100,7 +100,7 @@ report tables (Holm, date clusters) from saved backtest rows without simulating.
 | **M6a** ✅ | `hftf_eval.trace` + tests; `configs/demo.yaml` | trace totals equal `summary()` for every policy type (MLP, ANFIS, eFNN, limit), BarSim and TickSim |
 | **M6b** ✅ | `apps/api` with the five endpoints + `hftf serve`; OpenAPI types | TestClient tests on synthetic data; `/order` < 300 ms for 5 policies on CPU |
 | **M6c** ✅ | `web/` scaffold: design tokens and themes, shell, routing, command palette, typed API client | Lighthouse ≥ 95 on the shell (measured: 100 / 100 / 100) |
-| **M6d** | Execute screen: order ticket, price / inventory / cost-race charts, transport dock, leaderboard | one real val order replays end to end, all panels in sync |
+| **M6d** ✅ | Execute screen: order ticket, price / inventory / cost-race charts, transport dock, leaderboard | one real val order replays end to end, all panels in sync |
 | **M6e** | fuzzy brain rail + Brain screen (3D regime space, 2D fallback) | rule text matches `hftf eval rules`; the 3D chunk loads only on that screen |
 | **M6f** | Evidence and Training screens, hero, presentation mode, demo script, README | a 3-minute scripted demo runs from a clean checkout plus local `data/` and `runs/` |
 

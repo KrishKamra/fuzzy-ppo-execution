@@ -97,7 +97,7 @@ charts carry a text summary; reduced motion respected; colour never the only sig
 | | Deliverable | Exit criterion |
 |---|---|---|
 | **M6c** ✅ | `web/` scaffold, tokens and themes, shell (top bar, routing, palette), typed API client | Lighthouse ≥ 95 (performance, accessibility) on the shell |
-| **M6d** | Execute screen: ticket, price/inventory/cost charts, transport dock, leaderboard | a real val order replays end to end, all panels in sync |
+| **M6d** ✅ | Execute screen: ticket, price/inventory/cost charts, transport dock, leaderboard | a real val order replays end to end, all panels in sync |
 | **M6e** | Fuzzy brain rail + Brain screen (3D regime space with 2D fallback) | rule text equals `hftf eval rules`; the 3D chunk loads only on that screen |
 | **M6f** | Evidence and Training screens, hero, presentation mode, demo script, README | a 3-minute scripted demo runs from a clean checkout plus local `data/` and `runs/` |
 
@@ -109,6 +109,18 @@ on every surface level (dark 0.50, light 0.60). Measured on the production build
 Lighthouse desktop 100 performance / 100 accessibility / 100 best practices on Overview and Execute; LCP
 0.5 s, CLS ≤ 0.004; JS 132.6 KB + CSS 8.4 KB gzip. React Router 7 and TypeScript 5.9 were pinned over the
 newer majors (8, 7) for tooling compatibility.
+
+**M6d as built:** `web/src/features/execute/`. A pure model (`model.ts`: axis mapping, progressive reveal,
+standings, decisions) feeds ECharts option builders (`charts.ts`), so the logic is tested without a canvas. One
+replay clock (`store/replay.ts`, 2 decisions/s at 1×, 4× and 16×) drives every panel. The ticket lives in the URL
+(bookmarkable; `?random=1` draws one). VWAP is always requested as the reference. Changes from the spec, found
+by looking at the real render: **no end labels** (with six policies, every line ends at the same minute and
+the labels collided), replaced by one HTML legend whose click sets the focus policy. The standings table is the
+table view that the light-mode relief rule requires, and shows short names with the qualifier on a second
+line. The Execute route is lazy, so ECharts loads only there (shell 133.8 KB + Execute 173.2 KB gzip). ECharts
+is pinned to 5.6.0 (the 6.x line changed defaults). Under `prefers-reduced-motion` the replay opens at the
+finished state instead of autoplaying. Measured with a real 6-policy TickSim order: Lighthouse desktop 100 /
+100 / 100, LCP 0.7 s, TBT 0 ms, CLS 0.012.
 
 **Stretch (after M6f):** to animate the rule base *growing during training* in 3D, the trainer would also need
 to save rule snapshots (centres, widths) at each structure edit. Today `events.csv` records which rules

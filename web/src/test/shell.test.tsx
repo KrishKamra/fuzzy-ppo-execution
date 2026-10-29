@@ -64,9 +64,9 @@ test("number keys switch screens, but not while typing", async () => {
   const user = userEvent.setup();
   const router = renderAt("/");
   await user.keyboard("2");
-  expect(router.state.location.pathname).toBe("/execute");
-  const label = await screen.findByText("With tick replay");
-  expect(label.nextElementSibling).toHaveTextContent("2"); // two tick sessions in the mocked /api/meta
+  // Execute is a lazy route: the location commits once its chunk has loaded.
+  await waitFor(() => expect(router.state.location.pathname).toBe("/execute"));
+  expect(await screen.findByText("Pick an order and press Run")).toBeInTheDocument();
   await user.keyboard("{Control>}k{/Control}");
   const input = await screen.findByPlaceholderText(/Go to a screen/);
   await user.type(input, "3");

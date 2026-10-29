@@ -11,7 +11,7 @@ The audit prints a PASS/FAIL table and writes it under `readiness` in `docs/data
 (git-ignored). Thresholds live in `configs/data_readiness.yaml`. Change them there, not in code. Re-run
 the gate after **any** change to `hftf_data`, before training.
 
-**Scope (2026-10-22).** This is a university project on a frozen Bloomberg pull: 3 stocks, no further pulls.
+**Scope (2026-10-22).** This project runs on a frozen Bloomberg pull: 3 stocks, no further pulls.
 The earlier `pilot` and `research` (50-stock) tiers were removed. Research could not be reached by
 processing, and pilot is implied by this gate. The thresholds below are what the existing pull supports
 honestly, with one acknowledged gap (2026-09-10) that is dropped whole, never imputed.

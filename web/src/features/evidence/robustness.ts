@@ -28,7 +28,7 @@ export function robustnessOption(rows: Row[], sweep: SweepKey, ink: Ink): ChartO
   }); // fmt: skip
   return {
     animationDuration: 500,
-    textStyle: { fontFamily: "Inter Variable, sans-serif", color: ink.muted },
+    textStyle: { fontFamily: "IBM Plex Sans, sans-serif", color: ink.muted },
     grid: { left: 52, right: 16, top: 16, bottom: 44 },
     tooltip: {
       trigger: "axis", backgroundColor: ink.surface2, borderColor: ink.hairline, textStyle: { color: ink.fg, fontSize: 12 },

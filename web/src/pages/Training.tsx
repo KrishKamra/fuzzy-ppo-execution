@@ -19,7 +19,7 @@ export function runLabel(name: string): string {
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="gradient-border rounded-[var(--radius-control)] border border-hairline bg-surface-2 px-4 py-3" title={hint}>
+    <div className="signal-ring rounded-[var(--radius-control)] border border-hairline bg-surface-2 px-4 py-3" title={hint}>
       <p className="text-xs text-fg-subtle">{label}</p>
       <p className="tabular mt-1 font-mono text-xl">{value}</p>
     </div>
@@ -38,12 +38,13 @@ export function Training() {
   const run = useRun(name);
   const data = run.data;
   const fuzzy = !!data && (data.progress.n_rules?.some((x) => x !== null) ?? false);
+  // The rule-count line is amber, so the merge events take violet to stay visible on it.
   const accent = seriesColor(name?.includes("mlp") ? "mlp" : "efnn", theme);
 
   const s = useMemo(() => (data ? summarize(data) : null), [data]);
   const edge = useMemo(() => (data ? edgeOption(data, ink, accent) : null), [data, ink, accent]);
   const rules = useMemo(
-    () => (data && fuzzy ? rulesOption(data, ink, { add: seriesColor("mlp", theme), merge: seriesColor("efnn", theme), prune: seriesColor("efnn_limit", theme), line: accent }) : null),
+    () => (data && fuzzy ? rulesOption(data, ink, { add: seriesColor("mlp", theme), merge: seriesColor("anfis", theme), prune: seriesColor("efnn_limit", theme), line: accent }) : null),
     [data, fuzzy, ink, theme, accent],
   );
   const stability = useMemo(() => (data ? stabilityOption(data, ink, accent) : null), [data, ink, accent]);

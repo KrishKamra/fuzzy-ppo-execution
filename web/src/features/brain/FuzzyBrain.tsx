@@ -96,7 +96,7 @@ export function RuleBars({ rules, phi, active, theme, onHover }: {
 export function ActiveRule({ rule, firing }: { rule: Rule; firing: number }) {
   const s = ruleSentence(rule);
   return (
-    <div key={rule.rule} className="gradient-border glow-in animate-enter rounded-[var(--radius-panel)] bg-surface-2 p-3.5" data-active="true">
+    <div key={rule.rule} className="signal-ring glow-in animate-enter rounded-[var(--radius-panel)] bg-surface-2 p-3.5" data-active="true">
       <p className="flex items-center justify-between text-xs text-fg-subtle">
         <span>Active rule R{rule.rule}</span>
         <span className="tabular font-mono">fires {Math.round(firing * 100)}%</span>
@@ -112,7 +112,7 @@ export function ActiveRule({ rule, firing }: { rule: Rule; firing: number }) {
         ))}
         <br />
         <span className="font-mono text-xs text-accent-2">THEN </span>
-        <span className="font-medium text-aurora">{s.then}</span>
+        <span className="font-medium text-signal">{s.then}</span>
       </p>
     </div>
   );

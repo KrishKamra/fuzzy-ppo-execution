@@ -28,21 +28,15 @@ function ApiStatus() {
 export function LogoMark({ className = "size-7" }: { className?: string }) {
   return (
     <svg viewBox="0 0 64 64" aria-hidden className={clsx(className, "shrink-0")}>
-      <defs>
-        <linearGradient id="mark-aurora" x1="4" y1="4" x2="60" y2="60" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#6366F1" />
-          <stop offset="0.5" stopColor="#8B5CF6" />
-          <stop offset="1" stopColor="#22D3EE" />
-        </linearGradient>
-      </defs>
-      <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#mark-aurora)" />
-      <g fill="none" stroke="#fff" strokeLinecap="round">
-        <path d="M8 46 C14 46 15 27 20 27 S26 46 33 46" strokeOpacity="0.5" strokeWidth="2.6" />
-        <path d="M31 46 C38 46 39 27 44 27 S50 46 56 46" strokeOpacity="0.5" strokeWidth="2.6" />
-        <path d="M16 46 C24 46 25 16 32 16 S40 46 48 46" strokeWidth="3.6" />
+      <rect x="2" y="2" width="60" height="60" rx="14" fill="#1B1F25" />
+      <rect x="2.5" y="2.5" width="59" height="59" rx="13.5" fill="none" stroke="#FFFFFF" strokeOpacity="0.1" />
+      <g fill="none" strokeLinecap="round">
+        <path d="M8 46 C14 46 15 27 20 27 S26 46 33 46" stroke="#8B93A0" strokeWidth="2.6" />
+        <path d="M31 46 C38 46 39 27 44 27 S50 46 56 46" stroke="#8B93A0" strokeWidth="2.6" />
+        <path d="M16 46 C24 46 25 16 32 16 S40 46 48 46" stroke="#F2A93B" strokeWidth="3.6" />
       </g>
-      <circle cx="38.6" cy="27.4" r="6.4" fill="#fff" fillOpacity="0.22" />
-      <circle cx="38.6" cy="27.4" r="3.6" fill="#fff" />
+      <circle cx="38.6" cy="27.4" r="6.4" fill="#F2A93B" fillOpacity="0.25" />
+      <circle cx="38.6" cy="27.4" r="3.6" fill="#F2A93B" />
     </svg>
   );
 }
@@ -84,7 +78,7 @@ export function TopBar() {
                   <item.icon aria-hidden className="size-4" />
                   {item.label}
                   {isActive && (
-                    <span aria-hidden className="bg-aurora absolute inset-x-3 bottom-0 h-0.5 rounded-full" />
+                    <span aria-hidden className="bg-signal absolute inset-x-3 bottom-0 h-0.5 rounded-full" />
                   )}
                 </>
               )}

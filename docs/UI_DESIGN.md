@@ -1,20 +1,21 @@
 # UI design spec (M6c-M6f)
 
-The frontend (`web/`) of the course demo. Backend and data contract: [DEMO_PLAN.md](DEMO_PLAN.md) and
+The frontend (`web/`) of the demo app. Backend and data contract: [DEMO_PLAN.md](DEMO_PLAN.md) and
 `apps/api` (OpenAPI at `/docs`). This file fixes the look, the screens and the budget before any code.
 
 ## 1. Direction: "quiet precision, one vivid accent"
 
 The product is an *agent you can read*. The UI should feel like a precision instrument (Linear, Vercel,
-Raycast, Stripe's dashboards): dark, calm, dense but never cluttered, with one vivid signature gradient that
-marks the intelligent parts. Polish comes from typography, spacing, motion and restraint, not from effects
+Raycast, Stripe's dashboards): dark, calm, dense but never cluttered, with one signal colour (amber) that marks the agent. The theme is
+"Desk" (decision log 2026-10-30): a trading-terminal palette, chosen over the purple/cyan "aurora" that reads as a
+generic AI product. Polish comes from typography, spacing, motion and restraint, not from effects
 on every surface.
 
 | Effect | Verdict | Where |
 |---|---|---|
-| **Gradient** | **Yes, one signature gradient** ("aurora": indigo → violet → cyan), used sparingly | hero, primary button, the active-rule highlight, focus glow, a faint ambient mesh behind the app at ~6% opacity. In data: only meaningful scales (slow → fast pace) and soft area fills |
+| **Gradient** | **Minimal: one soft amber glow** behind the app at ~6% opacity, and a slight top-light on the primary button | everything else is solid. Amber marks the agent: the logo, the eFNN series, the active rule, the primary action, focus. In data: only meaningful scales (slow → fast pace) and soft area fills |
 | **Glassmorphism** | **Yes, on floating chrome only** | top bar, replay transport dock, tooltips, command palette, hero cards: surfaces with content moving *beneath* them, where blur adds depth |
-| Glass on chart panels | **No** | blur under lines and labels lowers contrast (WCAG), and repainting `backdrop-filter` under an animating replay costs frames. Panels are solid elevated surfaces with 1 px hairline gradient borders |
+| Glass on chart panels | **No** | blur under lines and labels lowers contrast (WCAG), and repainting `backdrop-filter` under an animating replay costs frames. Panels are solid elevated surfaces with 1 px hairline borders |
 | **3D** | **Yes, in one view, where it is information** | the *regime space*: the eFNN's input is three-dimensional, so each rule is a real ellipsoid (its 1σ contour) and the order's market state a moving point. Lazy-loaded; nowhere else |
 | 3D decoration (hero objects, 3D bar charts) | **No** | costs GPU and accessibility, adds no information, and 3D bars distort comparisons |
 | Neumorphism / heavy shadows | **No** | low contrast, dated |
@@ -23,24 +24,25 @@ on every surface.
 ## 2. Design system
 
 - **Theme:** dark by default, plus a light theme. A **presentation mode** (key `P`) switches to the light theme
-  with 125% type and hides secondary chrome: dark UIs wash out on projectors, so the classroom demo needs this.
-- **Colour tokens** (CSS variables, both themes): background `#0A0B10`; surface 1/2/3 as stepped elevations;
-  hairline borders at 8% white; text at 92/64/42% for primary/secondary/tertiary. Accent: the aurora gradient
-  `#6366F1 → #8B5CF6 → #22D3EE`.
-- **Data palette:** colour-blind-safe and validated (dataviz skill) in both themes. Our policies take the accent
-  hues; **VWAP is always neutral grey** (the reference); the other baselines take muted tones. Buy/sell are blue /
+  with 125% type and hides secondary chrome: dark UIs wash out on projectors.
+- **Colour tokens** (CSS variables, both themes): graphite with a slight blue bias, background `#101215` (light
+  `#F3F4F6`); surface 1/2/3 as stepped elevations; hairline borders at 8% ink; text at 94/66/52% for
+  primary/secondary/tertiary. Signal: amber `#F2A93B` for fills, `#9A5B00` for amber text on white.
+- **Data palette:** colour-blind-safe and validated (dataviz skill) in both themes. The eFNN (the agent) takes amber, slot 0; the
+  other policies take blue, aqua, orange, violet, magenta in that fixed order; **VWAP is always neutral grey** (the reference); the other baselines take muted tones. Buy/sell are blue /
   orange plus an arrow icon, never red/green alone. Pace uses a diverging scale: slow (blue) → schedule (grey) →
   fast (amber).
-- **Typography:** Inter Variable for UI; JetBrains Mono for numbers in tables and tickers; tabular numerals
+- **Typography:** IBM Plex Sans for UI; IBM Plex Sans Condensed for headings; IBM Plex Mono for numbers in tables
+  and tickers; tabular numerals
   everywhere a number changes. Scale 12 / 13 / 15 / 18 / 24 / 32 / 48. Self-hosted via fontsource (local-only app).
-- **Shape and space:** 4 px grid; radius 10 (panels) / 8 (controls) / 999 (chips); 1 px borders; one soft
+- **Shape and space:** 4 px grid; radius 6 (panels) / 4 (controls) / 999 (chips); 1 px borders; one soft
   shadow level for floating chrome only.
 - **Components:** shadcn/ui on Radix primitives (accessible dialogs, tabs, tooltips, sliders), restyled to the
   tokens. Icons: Lucide.
 
 ## 3. Screens
 
-1. **Hero (landing).** One screen: "An execution agent you can read." Animated aurora mesh, three headline
+1. **Hero (landing).** One screen: "An execution agent you can read." Left-aligned, a faint amber glow, three headline
    numbers that count up (beats VWAP by 0.16-0.24 bps out of sample, reproduced independently; limit orders
    beat the naive passive rule by 0.43-0.46 bps; rules that match execution theory), and **Run a live order**.
 2. **Execute (the main screen).** Everything is synchronised to one replay clock.
@@ -127,7 +129,7 @@ pace colour) feeds `FuzzyBrain` (the active rule as a sentence; firing bars; thr
 SVG, with the live value as a gliding needle). It appears in the Execute rail for single fuzzy checkpoints;
 an MLP or an ensemble gets a note on why it has no rule base. The Brain screen draws the **3D regime space**
 in plain three.js (no react-three-fiber or drei): rules as ±1σ ellipsoids coloured by pace, the tercile
-planes, the order's path (line + dots, violet → cyan) and its moving point. It renders on demand, stops
+planes, the order's path (line + dots, graphite → amber over time) and its moving point. It renders on demand, stops
 off-screen, auto-rotates until touched (not under reduced motion), and hovering a rule links the ellipsoid,
 bars and table. Without WebGL it falls back to two SVG projections. The pace colour scale spans ±10% (learned
 paces lie in 0.85-1.1; ±15% left most rules grey).
@@ -146,7 +148,7 @@ guard), both lazy. Confidence bands on numeric axes are custom polygon series (`
 stacking two lines only works on category axes, which the first render exposed. Every number comes from the API's
 report tables (`configs/demo.yaml`); the replication's values, whose rows are not kept, come from RESULTS.md.
 Lighthouse desktop: Evidence 99/100/100, Training 99/100/100. `hftf report figures` writes the same evidence as
-slide figures (`docs/figures/`), and `docs/DEMO_SCRIPT.md` is the 3-minute walkthrough.
+report figures (`docs/figures/`), and `docs/DEMO_SCRIPT.md` is the 3-minute walkthrough.
 
 **Stretch (after M6f):** to animate the rule base *growing during training* in 3D, the trainer would also need
 to save rule snapshots (centres, widths) at each structure edit. Today `events.csv` records which rules

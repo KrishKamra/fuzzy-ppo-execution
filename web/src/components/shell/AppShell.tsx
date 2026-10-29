@@ -31,17 +31,13 @@ function useGlobalHotkeys() {
   }, [navigate]);
 }
 
-/** Two soft aurora glows behind everything, at a few percent opacity: ambience, never under-chart contrast. */
+/** One soft amber glow behind everything, at a few percent opacity: ambience, never under-chart contrast. */
 function AmbientBackground() {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div
         className="drift absolute -top-[30vh] left-[10vw] size-[70vh] rounded-full blur-[120px]"
-        style={{ background: "var(--accent-2)", opacity: "var(--ambient-opacity)" }}
-      />
-      <div
-        className="drift-slow absolute top-[20vh] -right-[15vw] size-[60vh] rounded-full blur-[120px]"
-        style={{ background: "var(--accent-3)", opacity: "var(--ambient-opacity)" }}
+        style={{ background: "var(--accent)", opacity: "var(--ambient-opacity)" }}
       />
     </div>
   );

@@ -19,12 +19,12 @@ export interface Ink {
 
 const FALLBACK: Record<Theme, Ink> = {
   dark: {
-    theme: "dark", fg: "rgba(255,255,255,0.92)", muted: "rgba(255,255,255,0.64)", subtle: "rgba(255,255,255,0.5)",
-    hairline: "rgba(255,255,255,0.08)", surface: "#12131a", surface2: "#181a23", accent: "#8b5cf6",
+    theme: "dark", fg: "rgba(236,240,245,0.94)", muted: "rgba(236,240,245,0.66)", subtle: "rgba(236,240,245,0.52)",
+    hairline: "rgba(220,228,240,0.08)", surface: "#171a1f", surface2: "#1d2127", accent: "#f2a93b",
   },
   light: {
-    theme: "light", fg: "rgba(12,14,24,0.92)", muted: "rgba(12,14,24,0.7)", subtle: "rgba(12,14,24,0.6)",
-    hairline: "rgba(15,18,30,0.09)", surface: "#ffffff", surface2: "#f1f2f7", accent: "#8b5cf6",
+    theme: "light", fg: "rgba(21,24,29,0.94)", muted: "rgba(21,24,29,0.7)", subtle: "rgba(21,24,29,0.6)",
+    hairline: "rgba(21,24,29,0.1)", surface: "#ffffff", surface2: "#f7f8f9", accent: "#9a5b00",
   },
 }; // fmt: skip
 

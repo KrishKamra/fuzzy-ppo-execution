@@ -14,7 +14,7 @@ import { useUi } from "@/store/ui";
 
 const STATUS: Record<Status, { label: string; icon: ReactNode; cls: string }> = {
   supported: { label: "Supported", icon: <CheckCircle2 aria-hidden className="size-4" />, cls: "text-good" },
-  partly: { label: "Partly", icon: <CircleDashed aria-hidden className="size-4" />, cls: "text-accent-2" },
+  partly: { label: "Partly", icon: <CircleDashed aria-hidden className="size-4" />, cls: "text-fg-muted" },
   not: { label: "Not established", icon: <CircleSlash aria-hidden className="size-4" />, cls: "text-fg-subtle" },
 };
 
@@ -104,7 +104,7 @@ export function Evidence() {
             const s = STATUS[c.status];
             return (
               <li key={c.claim}>
-                <a href={`#${c.anchor}`} className="gradient-border block h-full rounded-[var(--radius-control)] border border-hairline bg-surface-2 p-4 transition-colors hover:bg-surface-3">
+                <a href={`#${c.anchor}`} className="signal-ring block h-full rounded-[var(--radius-control)] border border-hairline bg-surface-2 p-4 transition-colors hover:bg-surface-3">
                   <span className={clsx("flex items-center gap-1.5 text-xs font-medium", s.cls)}>{s.icon}{s.label}</span>
                   <span className="mt-1.5 block font-medium">{c.claim}</span>
                   <span className="mt-1 block text-sm text-fg-muted">{c.evidence}</span>

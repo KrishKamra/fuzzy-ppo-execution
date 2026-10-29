@@ -261,14 +261,14 @@ export default function RegimeSpace({ rules, path, k, active, hover, onHover, th
     c.dirty = true;
   }, [rules, theme]);
 
-  // The order's path through the space, coloured violet → cyan over time.
+  // The order's path through the space, fading from graphite to the agent's amber over time.
   useEffect(() => {
     const c = ctx.current;
     if (!c) return;
     const pts = path.map(toScene);
     const geo = new THREE.BufferGeometry().setFromPoints(pts.length ? pts : [new THREE.Vector3()]);
-    const a = new THREE.Color("#8b5cf6");
-    const b = new THREE.Color("#22d3ee");
+    const a = new THREE.Color("#5b6472");
+    const b = new THREE.Color("#f2a93b");
     const colors = new Float32Array(Math.max(pts.length, 1) * 3);
     pts.forEach((_, i) => {
       const col = a.clone().lerp(b, pts.length > 1 ? i / (pts.length - 1) : 0);

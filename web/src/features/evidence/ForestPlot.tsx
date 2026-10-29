@@ -25,7 +25,7 @@ function ticks(lo: number, hi: number): number[] {
 }
 
 /**
- * Point estimates with 95% CIs: thick = session clusters, thin = date clusters (the slide figures use the same
+ * Point estimates with 95% CIs: thick = session clusters, thin = date clusters (the report figures use the same
  * encoding). The dashed zero line is the reference (VWAP, or the policy compared against). Every row also has a
  * text equivalent for screen readers.
  */

@@ -88,7 +88,7 @@ export function DecisionCard({ trace }: { trace: OrderTrace }) {
               <div className="relative mt-1.5 h-1.5 rounded-full bg-surface-3" aria-hidden>
                 <span className="absolute top-0 left-1/2 h-full w-px bg-[var(--hairline-strong)]" />
                 <span
-                  className="bg-aurora absolute top-0 h-full rounded-full"
+                  className="absolute top-0 h-full rounded-full bg-fg-muted"
                   style={pct >= 0 ? { left: "50%", width: `${pct}%` } : { left: `${50 + pct}%`, width: `${-pct}%` }}
                 />
               </div>

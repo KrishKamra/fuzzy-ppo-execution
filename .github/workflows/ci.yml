@@ -1,0 +1,87 @@
+# CI for the whole monorepo: the Python packages (uv), the web app (npm) and the API contract between them.
+# Tests run on synthetic data; the licensed Bloomberg data is never in the repository, and tests that need it skip.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (ruff, pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install (CPU torch, locked)
+        run: uv sync --locked
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Test
+        run: uv run pytest
+
+  frontend:
+    name: Frontend (tsc, vitest, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  contract:
+    name: API contract (OpenAPI → TypeScript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: uv sync --locked
+      - run: npm ci
+        working-directory: web
+      - name: Regenerate the schema and the types
+        run: |
+          uv run hftf openapi --out web/src/api/openapi.json
+          (cd web && npx openapi-typescript src/api/openapi.json -o src/api/schema.d.ts)
+      - name: Fail if the committed types are stale
+        run: |
+          git diff --exit-code -- web/src/api/ || {
+            echo "::error::The API changed but web/src/api/ was not regenerated. Run 'npm run gen:api' in web/ and commit."
+            exit 1
+          }

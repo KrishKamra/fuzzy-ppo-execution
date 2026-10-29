@@ -3,20 +3,33 @@
 </p>
 
 <p align="center">
-  <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white">
-  <img alt="uv" src="https://img.shields.io/badge/uv-workspace-DE5FE9?logo=uv&logoColor=white">
-  <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-CPU-EE4C2C?logo=pytorch&logoColor=white">
-  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-API-009688?logo=fastapi&logoColor=white">
-  <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white">
-  <img alt="Vite" src="https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white">
-  <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss&logoColor=white">
-  <img alt="three.js" src="https://img.shields.io/badge/three.js-3D-000000?logo=threedotjs&logoColor=white">
-  <img alt="ECharts" src="https://img.shields.io/badge/ECharts-5.6-AA344D?logo=apacheecharts&logoColor=white">
+  <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white&style=flat-square">
+  <img alt="uv" src="https://img.shields.io/badge/uv-workspace-DE5FE9?logo=uv&logoColor=white&style=flat-square">
+  <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-CPU-EE4C2C?logo=pytorch&logoColor=white&style=flat-square">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-API-009688?logo=fastapi&logoColor=white&style=flat-square">
+  <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black&style=flat-square">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white&style=flat-square">
+  <img alt="Vite" src="https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white&style=flat-square">
+  <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss&logoColor=white&style=flat-square">
+  <img alt="three.js" src="https://img.shields.io/badge/three.js-3D-000000?logo=threedotjs&logoColor=white&style=flat-square">
+  <img alt="ECharts" src="https://img.shields.io/badge/ECharts-5.6-AA344D?logo=apacheecharts&logoColor=white&style=flat-square">
   <br>
-  <img alt="Tests" src="https://img.shields.io/badge/tests-99%20Python%20%C2%B7%2024%20web-2ea44f">
-  <img alt="Lighthouse" src="https://img.shields.io/badge/Lighthouse-%E2%89%A595%20%2F%20100%20%2F%20100-2ea44f?logo=lighthouse&logoColor=white">
-  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-blue">
+  <a href="https://github.com/KrishKamra/fuzzy-ppo-execution/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/KrishKamra/fuzzy-ppo-execution/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Tests" src="https://img.shields.io/badge/tests-99%20Python%20%C2%B7%2024%20web-2ea44f?style=flat-square">
+  <img alt="Lighthouse desktop, all five screens: performance at least 98, accessibility 100, best practices 100" src="https://img.shields.io/badge/Lighthouse-perf%20%E2%89%A598%20%C2%B7%20a11y%20100%20%C2%B7%20BP%20100-2ea44f?logo=lighthouse&logoColor=white&style=flat-square">
+  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
+</p>
+
+<p align="center">
+  <a href="#results-at-a-glance"><b>Results</b></a> ·
+  <a href="#how-it-works"><b>How it works</b></a> ·
+  <a href="#the-demo-app"><b>Demo app</b></a> ·
+  <a href="#run-it"><b>Run it</b></a> ·
+  <a href="#documentation"><b>Docs</b></a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/overview.png" alt="The app's overview screen: headline results in basis points" width="100%">
 </p>
 
 **Fuzzy Execution** is a reinforcement-learning agent that executes large stock orders on India's NSE at
@@ -27,9 +40,8 @@ neural network (eFNN)** that turns order-book imbalance, spread variance and vol
 *IF spread variance is high and volatility is high THEN slow down*.
 
 > [!NOTE]
-> A university project for an Intelligent Systems course. Results come from a market simulator built on
-> Bloomberg data for three Nifty-50 stocks (Jun-Oct 2026). They are research results, not trading advice or a
-> claim about live savings.
+> Results come from a market simulator built on Bloomberg data for three Nifty-50 stocks (Jun-Oct 2026). They
+> are research results, not trading advice or a claim about live savings.
 
 > [!IMPORTANT]
 > The market data is licensed (© Bloomberg L.P.) and is **not** in this repository, and neither are the trained
@@ -55,7 +67,7 @@ tests.
 </p>
 
 > [!TIP]
-> Every number, ablation, robustness sweep and caveat is in **[docs/RESULTS.md](docs/RESULTS.md)**. Slide-ready
+> Every number, ablation, robustness sweep and caveat is in **[docs/RESULTS.md](docs/RESULTS.md)**. Publication-ready
 > figures (SVG and PNG, with captions and sources) are in **[docs/figures/](docs/figures/README.md)**; regenerate
 > them with `uv run hftf report figures`.
 
@@ -117,18 +129,46 @@ The design, with every decision and its reason, is in [docs/ARCHITECTURE.md](doc
 A local web app replays real orders and shows the agent's reasoning
 ([design](docs/UI_DESIGN.md), [3-minute script](docs/DEMO_SCRIPT.md)).
 
-| Screen | What it shows |
-|---|---|
-| **Overview** | the headline results |
-| **Execute** | pick or draw an order; every policy executes it on the same market, minute by minute: price and fills, inventory, cost vs VWAP, live standings and the rule firing now |
-| **Brain** | the eFNN's rules as ellipsoids in its 3D regime space, the order's path through it, and the full rule base in plain language |
-| **Evidence** | each claim with its statistics, our run beside the replication, robustness sweeps, and what is *not* established |
-| **Training** | the learning curve, rules being added, merged and pruned, and every edit against the KL guard |
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/brain.png" alt="Brain screen: rules as ellipsoids in the 3D regime space, the active rule as a sentence and the membership functions">
+      <p><b>Brain.</b> The eFNN's rules as ellipsoids in its 3D regime space, the active rule as a sentence, and
+      the live membership functions.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/evidence.png" alt="Evidence screen: each claim with its status, and the forest plot of ensembles versus VWAP">
+      <p><b>Evidence.</b> Each claim with its statistics, our run beside the replication, and what is
+      <i>not</i> established.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/training.png" alt="Training screen: learning curve, rule count with add, merge and prune events, and edits against the KL guard">
+      <p><b>Training.</b> The learning curve, rules being added, merged and pruned, and every edit against the KL
+      guard.</p>
+    </td>
+    <td width="50%" valign="top">
+      <p><b>Execute</b> (not pictured). Pick or draw an order; every policy executes it on the same market, minute
+      by minute: price and fills, inventory, cost vs VWAP, live standings and the rule firing now.</p>
+      <p><sub>The Execute screen draws licensed Bloomberg prices, so it is shown live in the demo and never in
+      the repository. The screenshots here contain only model output and statistics.</sub></p>
+    </td>
+  </tr>
+</table>
 
-```bash
-uv run hftf serve                       # API on http://127.0.0.1:8000 (needs data/ and runs/)
-cd web && npm install && npm run dev    # app on http://127.0.0.1:5173
-```
+Amber always means the agent: the logo, the eFNN's series, the active rule. Press <kbd>P</kbd> for presentation
+mode (light theme, larger type), <kbd>T</kbd> to switch theme and <kbd>Ctrl</kbd>+<kbd>K</kbd> to search.
+
+## Run it
+
+The app needs the licensed data in `data/` and the trained checkpoints in `runs/`. Run each command from the
+directory shown, in its own terminal:
+
+| Terminal | Directory | Command | Then |
+|---|---|---|---|
+| 1 | repository root | `uv run hftf serve` | API on http://127.0.0.1:8000 (OpenAPI at `/docs`) |
+| 2 | `web/` | `npm install` (once), then `npm run dev` | open http://127.0.0.1:5173 |
 
 ## Quick start
 
@@ -179,7 +219,7 @@ uv run hftf report figures                                           # docs/figu
 | [project_context.md](project_context.md) | domain primer, data dictionary and invariants: start here |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the design and the decision log |
 | [docs/RESULTS.md](docs/RESULTS.md) | every experiment, with commands to reproduce it |
-| [docs/figures/](docs/figures/README.md) | slide-ready figures with captions and sources |
+| [docs/figures/](docs/figures/README.md) | publication-ready figures with captions and sources |
 | [docs/DATA_AUDIT.md](docs/DATA_AUDIT.md) · [DATA_TRANSFORMS.md](docs/DATA_TRANSFORMS.md) · [DATA_READINESS.md](docs/DATA_READINESS.md) | what the data contains, every transformation, and the readiness gate |
 | [docs/DEMO_PLAN.md](docs/DEMO_PLAN.md) · [UI_DESIGN.md](docs/UI_DESIGN.md) · [DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | the demo's backend, design and walkthrough |
 

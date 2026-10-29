@@ -1,6 +1,6 @@
 # web: demo frontend
 
-The course demo's UI (design spec: [`docs/UI_DESIGN.md`](../docs/UI_DESIGN.md); API: [`docs/DEMO_PLAN.md`](../docs/DEMO_PLAN.md)).
+The demo app's UI (design spec: [`docs/UI_DESIGN.md`](../docs/UI_DESIGN.md); API: [`docs/DEMO_PLAN.md`](../docs/DEMO_PLAN.md)).
 It runs **locally only**: the backend serves licensed Bloomberg-derived data.
 
 ```bash

@@ -1,8 +1,9 @@
 /**
- * Data palette (docs/UI_DESIGN.md §2). Validated with the dataviz skill's validate_palette.js on our chart
- * surfaces, in this order (the order is the colour-blind-safety mechanism; never re-order or cycle):
- *   dark  (#12131a): all checks pass; worst adjacent CVD ΔE 9.4, normal-vision ΔE 19.3, all ≥ 3:1 contrast.
- *   light (#ffffff): separation passes (CVD ΔE 9.2, normal 19.6); slots 2, 5, 6 are below 3:1 contrast, so in
+ * Data palette (docs/UI_DESIGN.md §2, theme "Desk"). Slot 0 is amber, the agent's colour (eFNN). Validated with the
+ * dataviz skill's validate_palette.js on our chart surfaces, in this order (the order is the colour-blind-safety
+ * mechanism; never re-order or cycle):
+ *   dark  (#171a1f): all checks pass; worst adjacent CVD ΔE 9.4, normal-vision ΔE 19.7, all ≥ 3:1 contrast.
+ *   light (#ffffff): separation passes (CVD ΔE 9.2, normal 27.6); slots 1, 3, 6 are below 3:1 contrast, so in
  *   light mode every chart using them must show direct labels or a table view (the relief rule).
  * VWAP is the reference, so it is neutral grey and outside the categorical slots. Text never takes a series
  * colour: values and labels stay in the fg tokens.
@@ -10,13 +11,13 @@
 export type Theme = "dark" | "light";
 
 const SLOTS: Record<Theme, readonly string[]> = {
-  //      violet     aqua       orange     blue       magenta    yellow
-  dark: ["#9085e9", "#199e70", "#d95926", "#3987e5", "#d55181", "#c98500"],
-  light: ["#6250d6", "#1baf7a", "#eb6834", "#2a78d6", "#e87ba4", "#eda100"],
+  //      amber      blue       aqua       orange     violet     magenta
+  dark: ["#c98500", "#3987e5", "#199e70", "#d95926", "#9085e9", "#d55181"],
+  light: ["#eda100", "#2a78d6", "#1baf7a", "#eb6834", "#6250d6", "#e87ba4"],
 };
 
 /** Neutral reference series (VWAP). */
-export const REFERENCE: Record<Theme, string> = { dark: "#8b8e9b", light: "#6b6e7a" };
+export const REFERENCE: Record<Theme, string> = { dark: "#8b919b", light: "#6b717b" };
 
 /**
  * Fixed series → slot assignment, so a policy keeps its colour on every screen and under every filter
@@ -48,8 +49,8 @@ export function seriesDashed(name: string): boolean {
 
 /** Diverging pace scale: slow (cool) → on schedule (neutral grey) → fast (warm). */
 export const PACE_SCALE: Record<Theme, { slow: string; neutral: string; fast: string }> = {
-  dark: { slow: "#3987e5", neutral: "#4a4c57", fast: "#d95926" },
-  light: { slow: "#2a78d6", neutral: "#d9dae1", fast: "#eb6834" },
+  dark: { slow: "#3987e5", neutral: "#4a4f58", fast: "#d95926" },
+  light: { slow: "#2a78d6", neutral: "#d8dbe0", fast: "#eb6834" },
 };
 
-export const NEEDS_DIRECT_LABELS_IN_LIGHT = new Set([1, 4, 5]); // slot indices below 3:1 on white
+export const NEEDS_DIRECT_LABELS_IN_LIGHT = new Set([0, 2, 5]); // slot indices below 3:1 on white

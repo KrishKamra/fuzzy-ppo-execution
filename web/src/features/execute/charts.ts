@@ -12,8 +12,8 @@ import { seriesColor, seriesDashed } from "@/lib/palette";
 
 import { costRaceSeries, cursorIndex, fills, inventorySeries, marketSeries, REFERENCE, startIndex } from "./model";
 
-const FONT = "Inter Variable, ui-sans-serif, system-ui, sans-serif";
-const MONO = "JetBrains Mono Variable, ui-monospace, monospace";
+const FONT = "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif";
+const MONO = "IBM Plex Mono, ui-monospace, monospace";
 export const GROUP = "execute";
 
 function base(trace: OrderTrace, ink: Ink, opts: { top: number; bottom: number; showTime: boolean }) {

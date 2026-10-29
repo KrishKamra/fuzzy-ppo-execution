@@ -32,20 +32,20 @@ const CLAIMS: { icon: ReactNode; value: string; unit: string; label: string; det
 export function Overview() {
   return (
     <div className="mx-auto max-w-5xl">
-      <section className="pt-10 pb-14 text-center">
-        <Eyebrow>Intelligent systems · Optimal execution on NSE</Eyebrow>
-        <h1 className="mx-auto mt-5 max-w-3xl text-5xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-6xl">
-          An execution agent <span className="text-aurora">you can read.</span>
+      <section className="pt-10 pb-14">
+        <Eyebrow>Regime-aware optimal execution · NSE</Eyebrow>
+        <h1 className="mt-5 max-w-3xl text-5xl leading-[1.02] font-semibold text-balance sm:text-6xl">
+          An execution agent <span className="text-signal">you can read.</span>
         </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-lg text-pretty text-fg-muted">
+        <p className="mt-6 max-w-2xl text-lg text-pretty text-fg-muted">
           A PPO agent slices large orders through the trading day. An evolving fuzzy network turns order-book
           imbalance, spread variance and volatility into regimes, and every decision traces back to a rule in plain
           language.
         </p>
-        <div className="mt-9 flex flex-wrap justify-center gap-3">
+        <div className="mt-9 flex flex-wrap gap-3">
           <Link
             to="/execute?random=1"
-            className="sheen bg-aurora group inline-flex h-11 items-center gap-2 rounded-[var(--radius-control)] px-5 font-medium text-white shadow-[0_12px_32px_-14px_var(--accent-2)] transition hover:brightness-110 active:scale-[0.98]"
+            className="sheen bg-signal group inline-flex h-11 items-center gap-2 rounded-[var(--radius-control)] px-5 font-medium text-on-accent shadow-[0_12px_32px_-18px_var(--accent)] transition hover:brightness-105 active:scale-[0.98]"
           >
             Run a live order <ArrowRight aria-hidden className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
           </Link>
@@ -59,7 +59,7 @@ export function Overview() {
       </section>
       <section aria-label="Headline results" className="grid gap-4 md:grid-cols-3">
         {CLAIMS.map((c) => (
-          <Panel key={c.label} className="gradient-border p-6 transition-transform duration-300 hover:-translate-y-0.5">
+          <Panel key={c.label} className="signal-ring p-6 transition-transform duration-300 hover:-translate-y-0.5">
             <div className="flex items-center gap-2 text-sm text-fg-muted">
               <span className="text-accent-2">{c.icon}</span>
               {c.label}

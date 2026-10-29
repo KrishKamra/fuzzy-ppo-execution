@@ -1,7 +1,7 @@
 # Demo script (3 minutes)
 
-A walkthrough of the web app for the course presentation. Every number on screen comes from
-[RESULTS.md](RESULTS.md); slide figures are in [figures/](figures/README.md).
+A 3-minute walkthrough of the web app. Every number on screen comes from
+[RESULTS.md](RESULTS.md); report figures are in [figures/](figures/README.md).
 
 ## Before you present
 

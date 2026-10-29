@@ -1,0 +1,34 @@
+name: Bug report
+description: Something does not work as documented.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Commands, the screen and order ticket (the Execute URL), or a minimal script.
+      render: shell
+    validations: { required: true }
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [data (hftf-data), simulator (hftf-sim), fuzzy layer (hftf-fuzzy), RL (hftf-rl), evaluation (hftf-eval), CLI, API, web app, docs]
+    validations: { required: true }
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, `uv --version`, `node --version`, browser (for the web app).
+  - type: checkboxes
+    id: data
+    attributes:
+      label: Data
+      options:
+        - label: This report contains no licensed market data (prices, raw ticks or bars).
+          required: true

@@ -584,11 +584,11 @@ def openapi(
     path = REPO_ROOT / out
     path.parent.mkdir(parents=True, exist_ok=True)
     schema = create_app(None).openapi()  # the routes only touch the service when they are called
-    path.write_text(json.dumps(schema, indent=2) + "\n")
+    path.write_bytes((json.dumps(schema, indent=2) + "\n").encode("utf-8"))  # LF on every platform
     console.print(f"wrote {path}")
 
 
-report_app = typer.Typer(no_args_is_help=True, help="Report and slide material from the saved results.")
+report_app = typer.Typer(no_args_is_help=True, help="Report material from the saved results.")
 app.add_typer(report_app, name="report")
 
 
@@ -599,7 +599,7 @@ def report_figures(
         "m4_efnn_s0", help="Run whose training curves and rule events are drawn."
     ),
 ) -> None:
-    """Render report/slide figures from runs/reports/*.csv and one training run (needs matplotlib, dev)."""
+    """Render report figures from runs/reports/*.csv and one training run (needs matplotlib, dev)."""
     from hftf_data.paths import REPO_ROOT
     from hftf_eval.figures import write_figures
 

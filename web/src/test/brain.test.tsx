@@ -49,7 +49,7 @@ test("fuzzy helpers: membership, the active rule and rules as sentences", () => 
   expect(s.clauses.map((c) => `${c.input}:${c.term}`)).toEqual(["Imbalance:neutral", "Spread variance:high", "Volatility:high"]);
   expect(s.then).toBe("pace 0.88× (slow down)");
   expect(ruleSentence({ ...RULES.rules[0]!, passive: 0.91 }).then).toContain("post 91% passively");
-  expect(paceColor(1, "dark")).toBe("rgb(74, 76, 87)"); // on schedule: the neutral midpoint
+  expect(paceColor(1, "dark")).toBe("rgb(74, 79, 88)"); // on schedule: the neutral midpoint
   expect(paceColor(0.5, "dark")).toBe("rgb(57, 135, 229)"); // clamps to the slow pole
 });
 

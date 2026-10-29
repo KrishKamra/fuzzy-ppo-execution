@@ -4,8 +4,8 @@ import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 type Variant = "primary" | "secondary" | "ghost";
 
 const VARIANTS: Record<Variant, string> = {
-  // The one gradient control on a screen: the primary action.
-  primary: "sheen bg-aurora text-white shadow-[0_8px_24px_-12px_var(--accent-2)] hover:brightness-110",
+  // The one signal-coloured control on a screen: the primary action.
+  primary: "sheen bg-signal text-on-accent font-medium shadow-[0_8px_24px_-16px_var(--accent)] hover:brightness-105",
   secondary: "bg-surface-2 text-fg border border-hairline hover:bg-surface-3",
   ghost: "text-fg-muted hover:text-fg hover:bg-surface-2",
 };

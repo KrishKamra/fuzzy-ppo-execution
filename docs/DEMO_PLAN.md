@@ -1,13 +1,13 @@
 # M6 plan: demo backend and frontend
 
-Status: **built** (M6a-M6f, 2026-10-30); the frontend design is in [UI_DESIGN.md](UI_DESIGN.md) and the walkthrough in [DEMO_SCRIPT.md](DEMO_SCRIPT.md). This is the plan for the course demo: a local web app that shows the
+Status: **built** (M6a-M6f, 2026-10-30); the frontend design is in [UI_DESIGN.md](UI_DESIGN.md) and the walkthrough in [DEMO_SCRIPT.md](DEMO_SCRIPT.md). This is the plan for the demo: a local web app that shows the
 system working on a real parent order, from the order ticket through the eFNN's regime reasoning to the fills
 and the cost against VWAP. Design decisions made while building go in `ARCHITECTURE.md` (decision log), as
 for M0-M5.
 
 ## 1. Goal and audience
 
-The project is for an Intelligent Systems course, so the demo has to make **the intelligent part visible**,
+The project is about an intelligent system, so the demo has to make **the intelligent part visible**,
 not just the result:
 
 1. **Fuzzy inference:** the three regime inputs moving over the session, the Gaussian membership functions
@@ -106,7 +106,7 @@ report tables (Holm, date clusters) from saved backtest rows without simulating.
 
 The frontend milestones follow [UI_DESIGN.md](UI_DESIGN.md) §5 (the single source for M6c-M6f).
 Suggested split for three people: one owns M6a-M6b (Python), one owns M6d and M6f (replay and results),
-one owns M6e (fuzzy panel and regime space, the course-specific part). The API contract (§3.2) is fixed first so the
+one owns M6e (fuzzy panel and regime space, the core of the project). The API contract (§3.2) is fixed first so the
 three can work in parallel against mocked JSON.
 
 ## 5. What the demo claims (and does not)
@@ -123,7 +123,7 @@ The UI should say exactly what the evidence supports (docs/RESULTS.md):
 | Learned limit orders help | **yes**: started at the naive always-passive rule, the agent beats it by 0.43-0.46 bps in both simulators and has a lighter tail (CVaR 69 vs 75); absolute passive gains are an upper bound (counterfactual fills) | limit-orders panel: naive rule vs learned policy on the same order, passive fills marked on the price chart |
 | eFNN beats MLP with limit orders | **no** (−0.03, n.s.) | stated on the panel |
 
-The course story is therefore *interpretable* intelligent execution with honest statistics, not "fuzzy beats
+The story is therefore *interpretable* intelligent execution with honest statistics, not "fuzzy beats
 neural nets". It is also the more defensible story.
 
 ## 6. Decisions to confirm

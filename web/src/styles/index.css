@@ -1,6 +1,8 @@
-/* Design tokens and base styles (docs/UI_DESIGN.md §2). Components use the Tailwind classes these tokens
-   generate (bg-surface-1, text-fg-muted, border-hairline, ...), never raw hex. Dark is the default theme;
-   [data-theme="light"] is the light theme; [data-presentation] enlarges type for a projector. */
+/* Design tokens and base styles (docs/UI_DESIGN.md §2, theme "Desk"). Components use the Tailwind classes these
+   tokens generate (bg-surface-1, text-fg-muted, border-hairline, ...), never raw hex. Dark is the default theme;
+   [data-theme="light"] is the light theme; [data-presentation] enlarges type for a projector.
+   Desk: graphite neutrals with a slight blue bias and one amber signal colour, which always means "the agent"
+   (the logo, the eFNN series, the active rule, the primary action). Everything else is ink and grey. */
 @import "tailwindcss";
 
 @theme inline {
@@ -16,51 +18,62 @@
   --color-accent: var(--accent);
   --color-accent-2: var(--accent-2);
   --color-accent-3: var(--accent-3);
+  --color-on-accent: var(--on-accent);
   --color-good: var(--good);
   --color-bad: var(--bad);
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
-  --radius-panel: 10px;
-  --radius-control: 8px;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "IBM Plex Sans Condensed", "IBM Plex Sans", "Arial Narrow", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+  --radius-panel: 6px;
+  --radius-control: 4px;
 }
 
 :root {
   color-scheme: dark;
-  --bg: #0a0b10;
-  --surface-1: #12131a;
-  --surface-2: #181a23;
-  --surface-3: #20222d;
-  --hairline: rgb(255 255 255 / 0.08);
-  --hairline-strong: rgb(255 255 255 / 0.14);
-  --fg: rgb(255 255 255 / 0.92);
-  --fg-muted: rgb(255 255 255 / 0.64);
-  --fg-subtle: rgb(255 255 255 / 0.5); /* ≥ 4.5:1 on every surface (min 0.47) */
-  /* The signature "aurora" gradient: used sparingly (hero, primary action, active rule, focus). */
-  --accent: #6366f1;
-  --accent-2: #8b5cf6;
-  --accent-3: #22d3ee;
-  --aurora: linear-gradient(120deg, var(--accent) 0%, var(--accent-2) 45%, var(--accent-3) 100%);
-  --glass: rgb(18 19 26 / 0.62);
-  --ambient-opacity: 0.07;
+  --bg: #101215;
+  --surface-1: #171a1f;
+  --surface-2: #1d2127;
+  --surface-3: #252a31;
+  --hairline: rgb(220 228 240 / 0.08);
+  --hairline-strong: rgb(220 228 240 / 0.15);
+  --fg: rgb(236 240 245 / 0.94);
+  --fg-muted: rgb(236 240 245 / 0.66);
+  --fg-subtle: rgb(236 240 245 / 0.52); /* ≥ 4.5:1 on every surface */
+  /* The signal: --accent fills (buttons, bars), --accent-2 is text and strokes on a surface, --accent-3 is the
+     glow. One soft glow is the only gradient in the theme. */
+  --accent: #f2a93b;
+  --accent-2: #f2a93b;
+  --accent-3: rgb(242 169 59 / 0.35);
+  --on-accent: #17120a;
+  --signal: linear-gradient(180deg, #f6b856 0%, #f2a93b 55%, #e39a2c 100%);
+  --glass: rgb(23 26 31 / 0.78);
+  --ambient-opacity: 0.06;
   /* Status (never a data series), always paired with an icon or label. */
-  --good: #0ca30c;
-  --bad: #d03b3b;
+  --good: #2ea043;
+  --bad: #e5534b;
   --type-scale: 1;
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f6f7fb;
+  --bg: #f3f4f6;
   --surface-1: #ffffff;
-  --surface-2: #f1f2f7;
-  --surface-3: #e8eaf1;
-  --hairline: rgb(15 18 30 / 0.09);
-  --hairline-strong: rgb(15 18 30 / 0.16);
-  --fg: rgb(12 14 24 / 0.92);
-  --fg-muted: rgb(12 14 24 / 0.7);
-  --fg-subtle: rgb(12 14 24 / 0.6); /* ≥ 4.5:1 on every surface (min 0.59) */
-  --glass: rgb(255 255 255 / 0.7);
-  --ambient-opacity: 0.1;
+  --surface-2: #f7f8f9;
+  --surface-3: #eceef1;
+  --hairline: rgb(21 24 29 / 0.1);
+  --hairline-strong: rgb(21 24 29 / 0.18);
+  --fg: rgb(21 24 29 / 0.94);
+  --fg-muted: rgb(21 24 29 / 0.7);
+  --fg-subtle: rgb(21 24 29 / 0.6); /* ≥ 4.5:1 on every surface */
+  --accent: #f2a93b;
+  --accent-2: #9a5b00; /* amber text on white: 5.4:1 */
+  --accent-3: rgb(224 154 44 / 0.3);
+  --on-accent: #1a1306;
+  --signal: linear-gradient(180deg, #f5b452 0%, #f2a93b 55%, #e09a2c 100%);
+  --glass: rgb(255 255 255 / 0.82);
+  --ambient-opacity: 0.08;
+  --good: #1a7f37;
+  --bad: #cf222e;
 }
 
 /* Projector mode: larger type, light theme (set together by the UI store). */
@@ -79,8 +92,15 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-sans);
-  font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
+}
+
+/* Headings use the condensed display face: dense, like a terminal header, never decorative. */
+h1,
+h2,
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.005em;
 }
 
 /* Numbers that change (costs, timers, tickers) never shift the layout. */
@@ -91,35 +111,33 @@ body {
 /* Floating chrome only (top bar, transport dock, palette, tooltips): never behind charts. */
 .glass {
   background: var(--glass);
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
 }
 
-/* Solid panel with a hairline border that brightens at the top edge (no blur). */
+/* Solid panel with a hairline border (no blur, no gradient). */
 .panel {
   position: relative;
   background: var(--surface-1);
   border-radius: var(--radius-panel);
   border: 1px solid var(--hairline);
-  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 40%);
 }
 
-.text-aurora {
-  background: var(--aurora);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+/* The agent's colour as text. */
+.text-signal {
+  color: var(--accent-2);
 }
 
-.bg-aurora {
-  background: var(--aurora);
+/* The agent's colour as a fill (primary action, the agent's bar). */
+.bg-signal {
+  background: var(--signal);
 }
 
-/* Focus is the accent glow, visible on every control. */
+/* Focus is the signal outline, visible on every control. */
 :focus-visible {
-  outline: 2px solid var(--accent-2);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 /* ---------------------------------------------------------------- motion vocabulary
@@ -144,24 +162,19 @@ body {
   animation: shimmer 1.6s linear infinite;
 }
 
-/* Interactive cards: an aurora border fades in on hover (a masked gradient ring, no layout change). */
-.gradient-border { position: relative; }
-.gradient-border::before {
+/* Interactive cards: a signal ring fades in on hover (an inset outline, no layout change). */
+.signal-ring { position: relative; }
+.signal-ring::before {
   content: "";
   position: absolute;
   inset: -1px;
   border-radius: inherit;
-  padding: 1px;
-  background: var(--aurora);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
+  border: 1px solid var(--accent);
   opacity: 0;
-  transition: opacity 220ms ease;
+  transition: opacity 180ms ease;
   pointer-events: none;
 }
-.gradient-border:hover::before, .gradient-border:focus-within::before, .gradient-border[data-active="true"]::before { opacity: 1; }
+.signal-ring:hover::before, .signal-ring:focus-within::before, .signal-ring[data-active="true"]::before { opacity: 0.85; }
 
 /* The primary action: a light sheen sweeps across on hover. */
 .sheen { position: relative; overflow: hidden; isolation: isolate; }
@@ -169,27 +182,26 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.28) 50%, transparent 70%);
+  background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.32) 50%, transparent 70%);
   transform: translateX(-120%);
   transition: transform 600ms ease;
   z-index: -1;
 }
 .sheen:hover::after { transform: translateX(120%); }
 
-/* The active rule: a soft aurora glow that breathes once when the regime changes. */
+/* The active rule: a soft amber pulse, once, when the regime changes. */
 @keyframes glow-in {
-  from { box-shadow: 0 0 0 0 rgb(139 92 246 / 0.55); }
-  to { box-shadow: 0 0 0 10px rgb(139 92 246 / 0); }
+  from { box-shadow: 0 0 0 0 rgb(242 169 59 / 0.5); }
+  to { box-shadow: 0 0 0 10px rgb(242 169 59 / 0); }
 }
 .glow-in { animation: glow-in 700ms ease-out; }
 
-/* Ambient background glows drift very slowly. */
+/* The ambient background glow drifts very slowly. */
 @keyframes drift {
   0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
   50% { transform: translate3d(4vw, 3vh, 0) scale(1.08); }
 }
-.drift { animation: drift 28s ease-in-out infinite; }
-.drift-slow { animation: drift 40s ease-in-out infinite reverse; }
+.drift { animation: drift 32s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   *,

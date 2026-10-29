@@ -1,0 +1,21 @@
+name: Experiment or research question
+description: Propose an experiment, an ablation or a check of a reported result.
+labels: [experiment]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question or hypothesis
+      description: e.g. "A dead zone on the passive fraction removes the fee cliff."
+    validations: { required: true }
+  - type: textarea
+    id: design
+    attributes:
+      label: Design
+      description: Policies and seeds, split (never select on test), simulator, episodes, and the comparison and statistic you will report.
+    validations: { required: true }
+  - type: textarea
+    id: success
+    attributes:
+      label: What result would change our minds?
+      description: State it before running; report it in docs/RESULTS.md either way.

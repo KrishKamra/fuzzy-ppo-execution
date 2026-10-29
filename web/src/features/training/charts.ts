@@ -52,7 +52,7 @@ export function summarize(run: RunCurves): RunSummary {
 function base(ink: Ink, yName: string) {
   return {
     animationDuration: 500,
-    textStyle: { fontFamily: "Inter Variable, sans-serif", color: ink.muted },
+    textStyle: { fontFamily: "IBM Plex Sans, sans-serif", color: ink.muted },
     grid: { left: 56, right: 16, top: 36, bottom: 32 },
     tooltip: { trigger: "axis", backgroundColor: ink.surface2, borderColor: ink.hairline, textStyle: { color: ink.fg, fontSize: 12 } },
     xAxis: { type: "value", min: 0, max: "dataMax", name: "iteration", nameLocation: "end", nameTextStyle: { color: ink.subtle }, axisLabel: { color: ink.subtle }, splitLine: { show: false }, axisLine: { lineStyle: { color: ink.hairline } } },
